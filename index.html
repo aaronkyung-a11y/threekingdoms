@@ -161,6 +161,7 @@
   .btn.duel-btn{ background:linear-gradient(#c0392b,#96281b); border-color:#e0603a; color:#fff; font-weight:bold;
     box-shadow:0 0 10px #c0392b60; animation:duelPulse 1.4s ease-in-out infinite; }
   @keyframes duelPulse{ 0%,100%{box-shadow:0 0 8px #c0392b60} 50%{box-shadow:0 0 16px #e0603a90} }
+  .btn.strat-btn{ background:linear-gradient(#2e7d6b,#1f5a4d); border-color:#3fae95; color:#fff; font-weight:bold; }
 
   .listitem{ display:flex; align-items:center; gap:8px; padding:8px; background:var(--panel2);
     border-radius:5px; margin-bottom:6px; cursor:pointer; }
@@ -1706,6 +1707,7 @@ function startBattle(atkId, defId, atkPicks, defPicks){
   B.playerSide = defPicks ? 'def' : 'atk'; // 플레이어가 조작하는 쪽
   B.phase = B.playerSide; // 플레이어 페이즈 먼저
   B.atkGarrison=0; B.defGarrison=0;
+  B.weather='맑음'; B.windDir=0; B.eventLog=[]; // 천기 상태
   // === 지형 생성: 방어 도시의 실제 지리 프로파일 반영 ===
   B.hexes=[];
   for(let col=0;col<HEX.cols;col++)for(let row=0;row<HEX.rows;row++){
@@ -1801,6 +1803,8 @@ function startBattle(atkId, defId, atkPicks, defPicks){
   sfx('start'); haptic(30);
   setBgmMode('battle'); // 전투 음악
   initBattleControls();
+  B.collapsed={};
+  applyWeatherStart(); // 천기 발동
 }
 function makeUnit(gen, troops, train, side, col, row){
   const tt = gen? troopType(gen) : TROOP_TYPES.inf;
@@ -1811,6 +1815,9 @@ function makeUnit(gen, troops, train, side, col, row){
     moved:false, acted:false,
     war: gen?gen.war:50, lead: gen?gen.lead:50, int: gen?gen.int:50,
     tt: tt.key, // 병과 key
+    status:{}, // 상태이상: confuse(혼란 턴), burn(화상 턴), inspired(각성 턴)
+    stratUsed:false, // 이번 전투 계략 사용 여부
+    rallied:false, // 영웅 각성 발동 여부
   };
 }
 function unitTT(u){ return TROOP_TYPES[u.tt] || TROOP_TYPES.inf; }
@@ -1848,12 +1855,17 @@ function renderBattle(){
     const col = isPlayerUnit(u)?'#3a6ea5':'#a83232';
     const ttCol = {cav:'#ff8080',inf:'#80c0ff',arc:'#80ffaa'}[u.tt];
     const selRing = (B.sel && B.sel.id===u.id)?'<circle cx="'+x+'" cy="'+y+'" r="'+(s*0.85)+'" fill="none" stroke="#fff" stroke-width="2.5"/>':'';
+    // 상태이상 아이콘
+    let st=''; if(u.status){ if(u.status.burn)st+='🔥'; if(u.status.confuse)st+='💫'; if(u.status.taunted)st+='🎣'; if(u.status.inspired)st+='✨'; }
+    const stTag = st? `<text class="hexunit-label" x="${x}" y="${y-16}" style="font-size:10px">${st}</text>`:'';
+    const inspRing = (u.status&&u.status.inspired)?'<circle cx="'+x+'" cy="'+y+'" r="'+(s*0.72)+'" fill="none" stroke="#ffd234" stroke-width="2"/>':'';
     h+=`<g class="hexunit" data-uid="${u.id}">
+      ${inspRing}
       <circle cx="${x}" cy="${y}" r="${s*0.62}" fill="${col}" stroke="${ttCol}" stroke-width="2.5" opacity="${u.acted?0.55:1}"/>
       <text class="hexunit-label" x="${x}" y="${y-6}" style="font-size:11px">${tt.icon}</text>
       <text class="hexunit-label" x="${x}" y="${y+5}">${u.name}</text>
       <text class="hexunit-label" x="${x}" y="${y+15}" style="font-size:8px">${(u.troops/1000).toFixed(1)}천</text>
-      ${selRing}</g>`;
+      ${stTag}${selRing}</g>`;
   }
   svg.innerHTML=h;
   svg.querySelectorAll('.hex').forEach(n=>{
@@ -1862,7 +1874,8 @@ function renderBattle(){
   svg.querySelectorAll('.hexunit').forEach(n=>{
     n.addEventListener('click',(e)=>{ e.stopPropagation(); onUnitClick(n.dataset.uid); });
   });
-  document.getElementById('bturn').textContent=`${B.turn}턴 · ${B.phase===B.playerSide?'아군 페이즈':'적군 페이즈'}`;
+  const wIcon = B.weatherObj && B.weatherObj.icon ? ' · '+B.weatherObj.icon+B.weather : (B.weather&&B.weather!=='맑음'?' · '+B.weather:'');
+  document.getElementById('bturn').textContent=`${B.turn}턴 · ${B.phase===B.playerSide?'아군':'적군'}${wIcon}`;
 }
 function hexPoints(cx,cy,r){
   let p=[];
@@ -1891,6 +1904,7 @@ function onUnitClick(uid){
   if(!u||u.troops<=0) return;
   if(isPlayerUnit(u) && B.phase===B.playerSide){
     if(u.acted){ binfo(`${u.name} 부대는 이미 행동했습니다.`); return; }
+    if(u.status && u.status.confuse){ binfo(`💫 ${u.name} 부대는 혼란에 빠져 명령을 따르지 못합니다! (${u.status.confuse}턴 남음)`); return; }
     B.sel=u; sfx('select'); haptic(15); renderBattle();
     const tt=unitTT(u);
     const aptTxt=u.gen?` (${tt.name}적성 ${aptLabel(u.gen,tt.key)})`:'';
@@ -1930,6 +1944,12 @@ function renderBattleCmd(){
       const duel=document.createElement('button'); duel.className='btn duel-btn'; duel.textContent='⚔️ 일기토';
       duel.onclick=manualDuel;
       cmd.appendChild(duel);
+    }
+    // 계략 버튼 (지력 충분 + 사거리 내 적)
+    if(canUseStrat(B.sel)){
+      const strat=document.createElement('button'); strat.className='btn strat-btn'; strat.textContent='🎋 계략';
+      strat.onclick=openStratMenu;
+      cmd.appendChild(strat);
     }
     const wait=document.createElement('button'); wait.className='btn'; wait.textContent='대기(행동종료)';
     wait.onclick=()=>{ B.sel.acted=true; B.sel.moved=true; B.sel=null; renderBattle(); checkPhaseEnd(); renderBattleCmd(); binfo('부대를 선택하세요.'); };
@@ -2124,6 +2144,201 @@ function playDuelAnimation(atkU, defU, roundWin, finalWin, rel, done){
   timers.push(setTimeout(clashStep, 650)); // 등장 후 시작
 }
 
+/* ============================================================
+   대역전 시스템: 계략 · 사기붕괴 · 천기 · 영웅각성
+   ============================================================ */
+const STRATAGEMS = {
+  fire:    { name:'화계', icon:'🔥', minInt:75, range:3, desc:'화공으로 광역 피해 + 화상(지속피해). 숲에 강력.' },
+  confuse: { name:'혼란', icon:'💫', minInt:70, range:3, desc:'적 부대를 혼란시켜 다음 턴 행동 봉쇄.' },
+  ambush:  { name:'복병', icon:'🌿', minInt:65, range:2, desc:'매복 기습. 큰 피해 + 사기 급감.' },
+  taunt:   { name:'유인', icon:'🎣', minInt:68, range:3, desc:'적을 도발해 끌어당기고 방어력 저하.' },
+};
+function stratSuccessRate(caster, target){
+  const ci=caster.int, ti=target.gen?target.int:40;
+  let base = 0.5 + (ci - ti)/120;
+  if(B.weatherObj){
+    if(B.weatherObj.effect==='ambush_boost') base+=0.12;
+  }
+  return Math.max(0.15, Math.min(0.92, base));
+}
+function canUseStrat(u){
+  if(!u || !u.gen || u.acted || u.stratUsed || B.phase!==B.playerSide) return null;
+  const avail = Object.entries(STRATAGEMS).filter(([k,s])=> u.int>=s.minInt);
+  if(!avail.length) return null;
+  const maxRange = Math.max(...avail.map(([k,s])=>s.range));
+  const foes = enemyUnits().filter(e=> hexDist(u,e)<=maxRange);
+  return foes.length? avail.map(([k])=>k) : null;
+}
+function openStratMenu(){
+  const u=B.sel;
+  if(!u){ binfo('먼저 아군 무장 부대를 선택하세요.'); return; }
+  if(u.stratUsed){ binfo(`${u.name}은(는) 이미 계략을 썼습니다.`); return; }
+  const avail = Object.entries(STRATAGEMS).filter(([k,s])=> u.int>=s.minInt);
+  if(!avail.length){ binfo(`${u.name}의 지력(${u.int})으로는 쓸 계략이 없습니다.`); return; }
+  let body=`<div style="font-size:12px;color:#b8a878;margin-bottom:8px">${u.name} (지력 ${u.int}) — 계략 선택 · 천기: ${B.weatherObj?B.weatherObj.icon+B.weather:'맑음'}</div>`;
+  avail.forEach(([k,s])=>{
+    const foes=enemyUnits().filter(e=>hexDist(u,e)<=s.range);
+    const usable=foes.length>0;
+    let note=usable?foes.length+'대상':'사거리 밖';
+    if(k==='fire' && B.weatherObj){ if(B.weatherObj.effect==='fire_boost') note+=' 💨강풍!'; if(B.weatherObj.effect==='fire_block') { note='폭우로 봉쇄'; }}
+    const blocked = (k==='fire' && B.weatherObj && B.weatherObj.effect==='fire_block');
+    body+=`<div class="listitem" style="${usable&&!blocked?'':'opacity:.4;pointer-events:none'}" onclick="closeModal(); pickStratTarget('${k}')">
+      <span style="font-size:18px">${s.icon}</span>
+      <div><b style="color:#d4af37">${s.name}</b> <span style="font-size:11px;color:#999">(사거리 ${s.range})</span><br>
+      <span style="font-size:11px;color:#b8a878">${s.desc}</span></div>
+      <span style="margin-left:auto;font-size:11px;color:${usable&&!blocked?'#8fd':'#f88'}">${note}</span></div>`;
+  });
+  showModal('🎋 계략', body, [{label:'취소',cls:'',fn:closeModal}]);
+}
+function pickStratTarget(key){
+  const u=B.sel, s=STRATAGEMS[key];
+  const foes=enemyUnits().filter(e=>hexDist(u,e)<=s.range);
+  if(!foes.length){ binfo('사거리 내 적이 없습니다.'); return; }
+  if(foes.length===1){ execStrat(key, u, foes[0]); return; }
+  let body=`<p style="margin-bottom:8px;color:#b8a878">${s.icon} ${s.name} 대상 선택</p>`;
+  foes.forEach(f=>{
+    const rate=Math.round(stratSuccessRate(u,f)*100);
+    body+=`<div class="listitem" onclick="closeModal(); execStrat('${key}', B.sel, B.units.find(x=>x.id==='${f.id}'))">
+      <b style="color:${f.gen?personaColor(f.gen):'#aaa'}">${f.name}</b>
+      <span style="margin-left:auto;color:#b8a878">성공률 ${rate}% · 지력 ${f.gen?f.int:40}</span></div>`;
+  });
+  showModal('계략 대상', body, [{label:'취소',cls:'',fn:closeModal}]);
+}
+function execStrat(key, caster, target){
+  const s=STRATAGEMS[key];
+  caster.stratUsed=true; caster.acted=true; caster.moved=true;
+  const rate=stratSuccessRate(caster,target);
+  const success=Math.random()<rate;
+  sfx(success?'crit':'select'); focusLinesFx();
+  const cx=target.col, cy=target.row;
+  if(!success){
+    binfo(`<b>${caster.name}</b>의 ${s.icon}${s.name} 실패! <span style="color:#f88">${target.name}이(가) 간파했다.</span>`);
+    popDamage(cx,cy,'간파!','counter'); haptic(40);
+    B.sel=null; renderBattle(); renderBattleCmd(); checkPhaseEnd();
+    return;
+  }
+  let msg=`<b style="color:#8fd">${caster.name}</b>의 ${s.icon}${s.name} 성공!`;
+  if(key==='fire'){
+    const terr=hexAt(target.col,target.row).terr;
+    let terrMul = terr==='forest'?1.6 : terr==='plain'?1.2 : 1.0;
+    if(B.weatherObj && B.weatherObj.effect==='fire_boost') terrMul*=1.5; // 강풍
+    const dmg=Math.floor(target.troops*(0.25+caster.int/400)*terrMul);
+    target.troops=Math.max(0,target.troops-dmg);
+    target.status.burn=2; target.morale=Math.max(0,target.morale-25);
+    enemyUnits().filter(e=>e!==target && hexDist(e,target)===1).forEach(e=>{
+      const d2=Math.floor(e.troops*0.12); e.troops=Math.max(0,e.troops-d2); e.status.burn=1;
+      spawnParticles(e.col,e.row,8,'#f80');
+    });
+    impactFlash('red'); shake('l'); haptic(120);
+    for(let i=0;i<20;i++) setTimeout(()=>spawnParticles(cx,cy,3,['#f80','#fc0','#f40'][i%3]),i*30);
+    msg+=`<br>${target.name} 화염 -${dmg}${terr==='forest'?' <span style="color:#f80">[숲: 대폭발!]</span>':''}${B.weatherObj&&B.weatherObj.effect==='fire_boost'?' <span style="color:#8cf">[강풍!]</span>':''}`;
+  } else if(key==='confuse'){
+    target.status.confuse=2; target.morale=Math.max(0,target.morale-15);
+    for(let i=0;i<12;i++) setTimeout(()=>spawnParticles(cx,cy,2,'#c0f'),i*40);
+    shake('m'); haptic(70);
+    msg+=`<br>${target.name} 혼란! 2턴간 행동 불가`;
+  } else if(key==='ambush'){
+    let mul=0.3+caster.int/350;
+    if(B.weatherObj && B.weatherObj.effect==='ambush_boost') mul*=1.4;
+    const dmg=Math.floor(target.troops*mul);
+    target.troops=Math.max(0,target.troops-dmg); target.morale=Math.max(0,target.morale-35);
+    slashFx(cx,cy); impactFlash(); shake('l'); haptic(110); spawnParticles(cx,cy,16,'#3a2');
+    msg+=`<br>${target.name} 매복 기습 -${dmg}, 사기 급감!`;
+  } else if(key==='taunt'){
+    target.status.taunted=2;
+    const nb=hexNeighbors(target.col,target.row).filter(n=>!unitAt(n.col,n.row));
+    if(nb.length){ nb.sort((a,b)=>hexDist(a,caster)-hexDist(b,caster)); target.col=nb[0].col; target.row=nb[0].row; }
+    target.morale=Math.max(0,target.morale-10);
+    msg+=`<br>${target.name}을(를) 유인 (방어력 저하)`;
+  }
+  binfo(msg);
+  if(target.troops<=0){ setTimeout(()=>{ sfx('destroy'); impactFlash('red'); popDamage(target.col,target.row,'궤멸!','crit'); }, 200); }
+  B.sel=null; renderBattle(); renderBattleCmd();
+  checkMoraleCollapse(enemySide());
+  checkBattleEnd(); checkPhaseEnd();
+}
+
+// 사기 붕괴
+function checkMoraleCollapse(side){
+  const units=B.units.filter(u=>u.side===side);
+  const alive=units.filter(u=>u.troops>0);
+  if(!alive.length) return;
+  const destroyed=units.filter(u=>u.troops<=0).length;
+  const total=units.length;
+  const avgMorale=alive.reduce((s,u)=>s+u.morale,0)/alive.length;
+  if(!B.collapsed) B.collapsed={};
+  if((destroyed>=Math.ceil(total/2) || avgMorale<30) && !B.collapsed[side]){
+    B.collapsed[side]=true;
+    alive.forEach(u=>{ u.morale=Math.max(0,u.morale-40); u.troops=Math.floor(u.troops*0.7); });
+    const isEnemy = side===enemySide();
+    binfo(`<b style="color:${isEnemy?'#8fd':'#f88'}">⚡ ${isEnemy?'적군':'아군'} 총붕괴! 사기가 무너져 이탈이 속출한다!</b>`);
+    sfx(isEnemy?'win':'lose'); shake('l'); haptic(200); impactFlash(isEnemy?'':'red');
+    alive.forEach(u=>spawnParticles(u.col,u.row,10, isEnemy?'#d44':'#4a8ad4'));
+    log(`${isEnemy?'적군':'아군'} 사기 총붕괴!`, true);
+  }
+}
+
+// 천기(날씨)
+const WEATHERS=[
+  {name:'맑음', icon:'☀️', weight:50, effect:null},
+  {name:'강풍', icon:'💨', weight:15, effect:'fire_boost', desc:'화계 위력 대폭 상승!'},
+  {name:'안개', icon:'🌫️', weight:12, effect:'ambush_boost', desc:'복병·기습 성공률 상승'},
+  {name:'폭우', icon:'🌧️', weight:12, effect:'fire_block', desc:'화계 봉쇄'},
+  {name:'역병', icon:'☠️', weight:6, effect:'plague', desc:'양측 병력 서서히 감소'},
+];
+function rollWeather(){
+  const total=WEATHERS.reduce((s,w)=>s+w.weight,0);
+  let r=Math.random()*total;
+  for(const w of WEATHERS){ if((r-=w.weight)<0) return w; }
+  return WEATHERS[0];
+}
+function applyWeatherStart(){
+  const w=rollWeather();
+  B.weather=w.name; B.weatherObj=w;
+  if(w.effect){
+    setTimeout(()=>{
+      showModal(`${w.icon} 천기 변화`, `<div style="text-align:center;line-height:1.8"><span style="font-size:32px">${w.icon}</span><br><b style="color:#d4af37">${w.name}</b><br>${w.desc||''}</div>`,
+        [{label:'확인',cls:'primary',fn:closeModal}]);
+    }, 700);
+    log(`전장에 ${w.name}! ${w.desc||''}`, true);
+  }
+}
+
+// 영웅 각성
+function checkHeroicRally(u){
+  if(!u.gen || u.rallied || u.troops<=0) return false;
+  const lowTroops = u.troops < u.maxTroops*0.35;
+  const surrounded = enemyUnits().filter(e=>hexDist(u,e)<=1).length>=2;
+  const brave = personaOf(u.gen)==='brave' || u.war>=88;
+  if(lowTroops && (surrounded||brave) && Math.random()<0.4){
+    u.rallied=true; u.status.inspired=3; u.morale=Math.min(150,u.morale+60);
+    binfo(`<b style="color:#ffd234">🔥 ${u.name} 분전(奮戰)! 위기에서 각성하여 무위를 떨친다!</b>`);
+    const cry=genLine(u.gen,'battle');
+    setTimeout(()=>binfo(`<span style="color:#dca;font-style:italic">${u.name}: "${cry}"</span>`), 400);
+    sfx('crit'); focusLinesFx(); impactFlash(); shake('m'); haptic(150);
+    spawnParticles(u.col,u.row,18,'#ffd234');
+    log(`${u.name} 분전 각성!`, true); renderBattle();
+    return true;
+  }
+  return false;
+}
+// 상태이상 턴 처리
+function tickStatuses(side){
+  B.units.filter(u=>u.side===side && u.troops>0).forEach(u=>{
+    if(u.status.burn){
+      const d=Math.floor(u.maxTroops*0.06); u.troops=Math.max(0,u.troops-d);
+      popDamage(u.col,u.row,'-'+d,'crit'); spawnParticles(u.col,u.row,4,'#f80');
+      u.status.burn--; if(u.status.burn<=0) delete u.status.burn;
+    }
+    if(u.status.confuse){ u.status.confuse--; if(u.status.confuse<=0) delete u.status.confuse; }
+    if(u.status.taunted){ u.status.taunted--; if(u.status.taunted<=0) delete u.status.taunted; }
+    if(u.status.inspired){ u.status.inspired--; if(u.status.inspired<=0) delete u.status.inspired; }
+  });
+  if(B.weatherObj && B.weatherObj.effect==='plague'){
+    B.units.filter(u=>u.troops>0).forEach(u=>{ const d=Math.floor(u.maxTroops*0.03); u.troops=Math.max(0,u.troops-d); });
+  }
+}
+
 function doAttack(atkU, defU){
   const dhex=hexAt(defU.col,defU.row);
   const defBonus=terrainDefBonus(dhex.terr);
@@ -2132,10 +2347,13 @@ function doAttack(atkU, defU){
   const atkApt=aptMul(atkU.gen, atkTT.key);   // 공격측 병과 적성
   const defApt=aptMul(defU.gen, defTT.key);   // 방어측 병과 적성
   const isRanged = hexDist(atkU,defU)>1; // 궁병 원거리 공격
+  // 상태이상 보정
+  const atkInspired = atkU.status && atkU.status.inspired ? 1.4 : 1.0; // 각성: 공격력 대폭↑
+  const defTaunted = defU.status && defU.status.taunted ? 0.75 : 1.0;  // 유인당함: 방어력↓
   // 데미지: 병과 공격배율·상성·적성 반영
   const atkPower = atkU.troops*(0.35+atkU.war/300)*(0.6+atkU.train/250)*(0.5+atkU.morale/200)
-    *atkTT.atkMul*counterMul*atkApt;
-  const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt;
+    *atkTT.atkMul*counterMul*atkApt*atkInspired;
+  const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt*defTaunted;
   let dmg = Math.max(50, Math.floor(atkPower - defPower*0.5 + (Math.random()*200-100)));
   dmg = Math.min(dmg, defU.troops);
   defU.troops -= dmg;
@@ -2161,6 +2379,8 @@ function doAttack(atkU, defU){
   if(counter>0){ setTimeout(()=>{ popDamage(atkU.col,atkU.row,'-'+counter,'counter'); hitFlash(atkU.col,atkU.row); spawnParticles(atkU.col,atkU.row,5,isPlayerUnit(atkU)?'#4a8ad4':'#d44'); sfx('hit'); haptic(30); }, 220); }
   const aptTag = atkU.gen ? ` <span style="color:#dca">${atkTT.name}${aptLabel(atkU.gen,atkTT.key)}</span>` : '';
   let msg=`<b>${atkU.name}</b>(${atkTT.icon}${aptTag}) → <b>${defU.name}</b>(${defTT.icon}) · 피해 ${dmg}`;
+  if(atkInspired>1) msg+=` <span style="color:#ffd234">[분전!]</span>`;
+  if(defTaunted<1) msg+=` <span style="color:#8fa">[유인]</span>`;
   if(counterMul>1.05) msg+=` <span style="color:#8fd">[병과우세]</span>`;
   else if(counterMul<0.95) msg+=` <span style="color:#f99">[병과열세]</span>`;
   if(isRanged) msg+=` <span style="color:#8fa">[원거리]</span>`;
@@ -2170,6 +2390,10 @@ function doAttack(atkU, defU){
     setTimeout(()=>{ sfx('destroy'); shake('l'); haptic(150); impactFlash('red'); popDamage(defU.col,defU.row,'궤멸!','crit'); spawnParticles(defU.col,defU.row,20,isPlayerUnit(defU)?'#4a8ad4':'#d44'); }, 150); }
   binfo(msg);
   B.sel=null; renderBattle(); renderBattleCmd();
+  // 대역전 체크: 방어측 각성(위기 시), 양측 사기붕괴
+  if(defU.troops>0) checkHeroicRally(defU);
+  if(atkU.troops>0 && atkU.troops<atkU.maxTroops*0.35) checkHeroicRally(atkU);
+  checkMoraleCollapse(defU.side);
   checkBattleEnd();
   checkPhaseEnd();
 }
@@ -2191,10 +2415,22 @@ function enemyPhase(){
     if(i>=foes.length){ endEnemyPhase(); return; }
     const u=foes[i++];
     if(u.troops<=0){ step(); return; }
+    // 혼란 상태면 행동 스킵
+    if(u.status && u.status.confuse){ popDamage(u.col,u.row,'혼란','counter'); setTimeout(step,300); return; }
     // AI: 가장 가까운 플레이어 부대로 이동 후 공격
     const targets=playerUnits();
     if(!targets.length){ endEnemyPhase(); return; }
     let target=targets.reduce((a,b)=> hexDist(u,a)<=hexDist(u,b)?a:b);
+    // AI 계략: 지력 높은 적이 확률적으로 화계/복병
+    if(u.gen && u.int>=75 && !u.stratUsed && Math.random()<0.3){
+      const foesInRange=playerUnits().filter(e=>hexDist(u,e)<=3);
+      if(foesInRange.length){
+        const tgt=foesInRange[0]; u.stratUsed=true;
+        const key = u.int>=B.weatherObj && B.weatherObj && B.weatherObj.effect==='fire_boost' ? 'fire' : (Math.random()<0.5?'ambush':'fire');
+        setTimeout(()=>{ enemyStrat(key,u,tgt); setTimeout(step,500); }, 300);
+        return;
+      }
+    }
     // 이동 (이동력만큼)
     const mv=unitTT(u).move;
     if(hexDist(u,target)>unitTT(u).range){
@@ -2232,14 +2468,51 @@ function enemyAttack(atkU,defU){
   if(cm>1.05) msg+=' [병과우세]';
   if(defU.troops<=0){ msg+=` — ${defU.name} 궤멸!`; setTimeout(()=>{ sfx('destroy'); shake('l'); haptic(120); }, 150); }
   binfo(msg);
-  renderBattle(); checkBattleEnd();
+  renderBattle();
+  // 플레이어(방어측) 각성·붕괴 체크
+  if(defU.troops>0) checkHeroicRally(defU);
+  checkMoraleCollapse(defU.side);
+  checkBattleEnd();
+}
+// 적 AI 계략
+function enemyStrat(key, caster, target){
+  const s=STRATAGEMS[key]||STRATAGEMS.ambush;
+  const rate=stratSuccessRate(caster,target);
+  focusLinesFx(); sfx('crit');
+  if(Math.random()>=rate){
+    binfo(`[적] ${caster.name}의 ${s.icon}${s.name} — <span style="color:#8fd">아군이 간파!</span>`);
+    popDamage(target.col,target.row,'간파!','');
+    renderBattle(); return;
+  }
+  const cx=target.col, cy=target.row;
+  if(key==='fire'){
+    const terr=hexAt(cx,cy).terr;
+    let mul=terr==='forest'?1.6:terr==='plain'?1.2:1.0;
+    if(B.weatherObj && B.weatherObj.effect==='fire_boost') mul*=1.5;
+    const dmg=Math.floor(target.troops*(0.25+caster.int/400)*mul);
+    target.troops=Math.max(0,target.troops-dmg); target.status.burn=2; target.morale=Math.max(0,target.morale-25);
+    impactFlash('red'); shake('l'); haptic(120);
+    for(let i=0;i<16;i++) setTimeout(()=>spawnParticles(cx,cy,3,['#f80','#fc0'][i%2]),i*30);
+    binfo(`[적] ${caster.name}의 🔥화계! ${target.name} 화염 피해 -${dmg}`);
+  } else {
+    const dmg=Math.floor(target.troops*(0.3+caster.int/350));
+    target.troops=Math.max(0,target.troops-dmg); target.morale=Math.max(0,target.morale-35);
+    slashFx(cx,cy); impactFlash(); shake('l'); haptic(110); spawnParticles(cx,cy,16,'#3a2');
+    binfo(`[적] ${caster.name}의 🌿복병! ${target.name} 기습 -${dmg}`);
+  }
+  renderBattle();
+  if(target.troops>0) checkHeroicRally(target);
+  checkMoraleCollapse(target.side);
+  checkBattleEnd();
 }
 function endEnemyPhase(){
+  tickStatuses('atk'); tickStatuses('def'); // 상태이상 턴 처리(화상·혼란 등)
   B.turn++;
   B.units.forEach(u=>{ u.moved=false; u.acted=false; });
   B.phase=B.playerSide; B.duelDone=false;
   renderBattle(); renderBattleCmd();
-  binfo('아군 페이즈. 부대를 선택하세요.');
+  checkBattleEnd();
+  if(B.active){ binfo('아군 페이즈. 부대를 선택하세요.'); }
   if(B.turn>12){ endBattle('timeout'); }
 }
 
