@@ -1313,12 +1313,12 @@ function portraitFeatures(gen){
 // SVG 초상화 생성 (size px)
 // AI 생성 초상화 (portraits/ 폴더의 이미지)
 const PORTRAIT_IMG = {
-  '관우':'portraits/guanyu.jpg',
-  '조운':'portraits/zhaoyun.jpg',
-  '장비':'portraits/zhangfei.jpg',
-  '여포':'portraits/lubu.jpg',
-  '태사자':'portraits/taishici.jpg',
-  '황충':'portraits/huangzhong.jpg',
+  '관우':'portraits/guanyu.png',
+  '조운':'portraits/zhaoyun.png',
+  '장비':'portraits/zhangfei.png',
+  '여포':'portraits/lubu.png',
+  '태사자':'portraits/taishici.png',
+  '황충':'portraits/huangzhong.png',
 };
 function genPortraitSVG(gen, size){
   if(!gen) return '';
@@ -1326,7 +1326,7 @@ function genPortraitSVG(gen, size){
   // 실제 이미지가 있으면 우선 사용
   const img = PORTRAIT_IMG[gen.name];
   if(img){
-    return `<img src="${img}" width="${s}" height="${s}" style="border-radius:8px;object-fit:cover;object-position:top" alt="${gen.name}">`;
+    return `<img src="${img}" width="${s}" height="${s}" style="border-radius:8px;object-fit:cover;object-position:top;background:linear-gradient(160deg,#3a3226,#241c12)" alt="${gen.name}">`;
   }
   const f=portraitFeatures(gen);
   // 얼굴형 path
