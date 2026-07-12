@@ -197,8 +197,9 @@
     text-shadow:0 0 30px #d4af3760, 0 4px 12px #000; opacity:0; animation:opFade 1.4s ease 1s forwards; }
   .op-ver{ font-size:13px; color:#8a7658; letter-spacing:2px; margin:-14px 0 18px; }
   .tb-ver{ font-size:10px; color:#8a7658; margin-left:6px; font-weight:normal; letter-spacing:0.5px; }
-  .op-poem{ font-size:15px; color:#c8b088; line-height:2; min-height:120px; font-style:italic;
-    white-space:pre-line; opacity:0; animation:opFade 1.6s ease 2s forwards; }
+  .op-poem{ font-size:15px; color:#c8b088; line-height:2; height:240px; font-style:italic;
+    display:flex; flex-direction:column; justify-content:flex-start; align-items:center; text-align:center;
+    white-space:pre-line; overflow:hidden; opacity:0; animation:opFade 1.6s ease 2s forwards; }
   .op-start{ margin-top:28px; display:inline-block; padding:14px 30px; border:2px solid var(--gold);
     border-radius:8px; color:#e8c874; font-size:17px; font-weight:bold; cursor:pointer; letter-spacing:2px;
     background:linear-gradient(#3a2c18,#241a0e); opacity:0; animation:opFade 1s ease 4s forwards, opPulse 2s ease 5s infinite;
@@ -454,7 +455,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.28';
+const GAME_VERSION = 'v2.29';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
