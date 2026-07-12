@@ -146,7 +146,7 @@
   #endturn.hidden{ display:none; }
 
   /* Modal */
-  .modal-bg{ position:absolute; inset:0; background:rgba(0,0,0,.75); z-index:20; display:flex;
+  .modal-bg{ position:absolute; inset:0; background:rgba(0,0,0,.75); z-index:60; display:flex;
     align-items:center; justify-content:center; padding:20px; }
   .modal-bg.hidden{ display:none; }
   .modal{ background:var(--panel); border:2px solid var(--gold); border-radius:10px; max-width:520px;
@@ -350,7 +350,7 @@
   <div id="bottom" class="hidden"></div>
 </div>
 
-<div class="modal-bg hidden" id="modal">
+<div class="modal-bg hidden" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <h3 id="modal-title">제목</h3>
     <div class="mbody" id="modal-body"></div>
@@ -837,6 +837,7 @@ function init(scenarioKey, chosenFaction){
 /* ---------- 반동탁연합 이벤트 ---------- */
 function allianceFormEvent(){
   if(G.eventFlags.allianceFormed) return;
+  if(B.active){ setTimeout(allianceFormEvent, 800); return; } // 전투 중이면 대기
   G.eventFlags.allianceFormed=true;
   const isDong = G.playerFaction===1;
   const body = isDong
@@ -852,6 +853,7 @@ function allianceFormEvent(){
 }
 function allianceBreakEvent(){
   if(G.eventFlags.allianceBroken) return;
+  if(B.active){ setTimeout(allianceBreakEvent, 800); return; } // 전투 중이면 대기
   G.eventFlags.allianceBroken=true;
   G.alliance.active=false;
   // 낙양 천도 이벤트: 플레이어가 동탁이 아니고 낙양이 아직 동탁 소유면 낙양 소각·공백지화, 장안 강화
@@ -2050,6 +2052,7 @@ function startBattle(atkId, defId, atkPicks, defPicks){
   });
 
   document.getElementById('battle').classList.add('show');
+  closeModal(); // 안전장치: 전투 진입 시 잔여 모달 확실히 닫기
   const roleTxt = (B.playerSide==='def' ? `🛡️ ${def.name} 방어전` : `${atk.name}→${def.name}`) + ` · ${B.terrainName||''}`;
   document.getElementById('btitle').textContent=roleTxt;
   resetBattleView();
@@ -2561,10 +2564,8 @@ function applyWeatherStart(){
   const w=rollWeather();
   B.weather=w.name; B.weatherObj=w;
   if(w.effect){
-    setTimeout(()=>{
-      showModal(`${w.icon} 천기 변화`, `<div style="text-align:center;line-height:1.8"><span style="font-size:32px">${w.icon}</span><br><b style="color:#d4af37">${w.name}</b><br>${w.desc||''}</div>`,
-        [{label:'확인',cls:'primary',fn:closeModal}]);
-    }, 700);
+    // 모달 대신 배너로 표시(계략/일기토 모달과 충돌 방지)
+    setTimeout(()=>{ if(B.active){ bigBanner(`${w.icon} ${w.name}`, '#8cf'); binfo(`<b style="color:#8cf">${w.icon} 천기: ${w.name}</b> — ${w.desc||''}`); } }, 500);
     log(`전장에 ${w.name}! ${w.desc||''}`, true);
   }
 }
@@ -2887,13 +2888,15 @@ function checkDebutGenerals(){
   const playerNew = newcomers.filter(n=>n.faction===G.playerFaction);
   if(playerNew.length){
     const names=playerNew.map(n=>n.name).join(', ');
-    setTimeout(()=>{
+    const showDebut=()=>{
+      if(B.active){ setTimeout(showDebut, 800); return; }
       showModal('🎋 새로운 인재 등장!',
         `<div style="line-height:1.8"><b style="color:#d4af37">${G.year}년</b>, 그대의 세력에 젊은 인재가 등장했습니다.<br><br>
         ${playerNew.map(n=>`<b style="color:#8fd">${n.name}</b> — ${n.city}`).join('<br>')}<br><br>
         <span style="font-size:12px;color:#999">이제 이들을 전장에 내보낼 수 있습니다.</span></div>`,
         [{label:'확인',cls:'primary',fn:closeModal}]);
-    }, 400);
+    };
+    setTimeout(showDebut, 400);
     log(`${G.year}년 — 새 인재 등장: ${names}`, true);
   } else if(newcomers.length){
     log(`${G.year}년 — ${newcomers.map(n=>n.name).join(', ')} 등장(타 세력)`);
