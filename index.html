@@ -1,0 +1,2277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>群雄割據 삼국지</title>
+<!-- PWA -->
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#241c10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="군웅할거">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root{
+    --bg:#1a1510; --panel:#2a2318; --panel2:#332a1c; --ink:#e8dcc0; --ink2:#b8a878;
+    --gold:#d4af37; --red:#a83232; --blue:#3a6ea5; --green:#4a7c3a; --line:#4a3f28;
+  }
+  body{ font-family:'Nanum Gothic','Malgun Gothic',sans-serif; background:var(--bg); color:var(--ink);
+    overflow:hidden; user-select:none; -webkit-user-select:none; }
+  #app{ width:100vw; height:100vh; height:100dvh; display:flex; flex-direction:column; position:relative;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
+
+  /* PWA 설치 버튼 */
+  #installBtn{ position:fixed; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:60;
+    background:linear-gradient(#d4af37,#b8942a); color:#1a1208; border:none; border-radius:22px;
+    padding:10px 16px; font-size:13px; font-weight:bold; box-shadow:0 3px 10px rgba(0,0,0,.5);
+    display:none; align-items:center; gap:6px; cursor:pointer; }
+  #installBtn.show{ display:flex; }
+
+  /* Top bar */
+  #topbar{ background:linear-gradient(#3a2f1c,#241c10); border-bottom:2px solid var(--gold);
+    padding:5px 10px; }
+  .tb-row1{ display:flex; align-items:center; gap:8px; }
+  #topbar .title{ color:var(--gold); font-weight:bold; font-size:16px; letter-spacing:1px; flex-shrink:0; }
+  #topbar .date{ color:var(--ink2); font-size:12px; flex-shrink:0; }
+  #topbar .res{ display:flex; align-items:center; gap:10px; font-size:12px; margin-top:3px;
+    white-space:nowrap; overflow-x:auto; }
+  #topbar .res::-webkit-scrollbar{ display:none; }
+  #topbar .res span{ color:var(--gold); font-weight:bold; }
+  #topbar .res .rlbl{ color:var(--ink2); font-weight:normal; }
+  .topbtns{ margin-left:auto; display:flex; gap:5px; flex-shrink:0; }
+  .tbtn{ background:var(--panel2); border:1px solid var(--gold); color:var(--ink);
+    width:32px; height:30px; border-radius:6px; font-size:15px; cursor:pointer; padding:0;
+    display:flex; align-items:center; justify-content:center; }
+  .tbtn:active{ background:var(--gold); }
+
+  /* Fixed message strip */
+  #msgstrip{ background:#0d0b06; border-bottom:1px solid var(--line); height:48px; overflow-y:auto;
+    padding:5px 10px; }
+  #msglist .m{ font-size:12.5px; line-height:1.4; color:var(--ink2); margin-bottom:1px; }
+  #msglist .m.hi{ color:var(--gold); font-weight:bold; }
+  #msglist .m .mt{ color:#7a6a48; font-size:10px; margin-right:5px; }
+
+  /* Map area */
+  #mapwrap{ flex:1; position:relative; overflow:hidden; background:#12100a; }
+  #mapsvg{ width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+  #mapsvg:active{ cursor:grabbing; }
+  #zoomctrl{ position:absolute; right:10px; top:10px; z-index:6; display:flex; flex-direction:column; gap:6px; }
+  #zoomctrl button{ width:42px; height:42px; border-radius:8px; border:1px solid var(--gold);
+    background:rgba(20,16,10,.85); color:var(--gold); font-size:20px; font-weight:bold; cursor:pointer; }
+  #zoomctrl button:active{ background:var(--gold); color:#000; }
+  .city-node{ cursor:pointer; }
+  .city-label{ font-size:16px; fill:var(--ink); pointer-events:none; text-anchor:middle; font-weight:bold;
+    paint-order:stroke; stroke:#000; stroke-width:3.5px; }
+  .city-owner{ font-size:12px; pointer-events:none; text-anchor:middle;
+    paint-order:stroke; stroke:#000; stroke-width:3px; }
+
+  /* Bottom panel */
+  #bottom{ background:var(--panel); border-top:2px solid var(--gold); max-height:44vh;
+    overflow-y:auto; padding:0; }
+  #bottom.hidden{ display:none; }
+  .panel-head{ background:var(--panel2); padding:8px 12px; display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2; }
+  .panel-head .cname{ font-size:19px; font-weight:bold; color:var(--gold); }
+  .panel-head .cclose{ margin-left:auto; background:var(--red); color:#fff; border:none; border-radius:4px;
+    width:34px; height:34px; font-size:18px; cursor:pointer; }
+  .panel-body{ padding:10px 12px; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px 16px; font-size:15px; margin-bottom:12px; }
+  .stat-grid .k{ color:var(--ink2); }
+  .stat-grid .v{ color:var(--ink); font-weight:bold; float:right; }
+  .bar{ height:6px; background:#000; border-radius:3px; overflow:hidden; margin-top:2px; }
+  .bar>i{ display:block; height:100%; }
+
+  .cmd-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+  .cmd-btn{ background:linear-gradient(#4a3f28,#332a1c); border:1px solid var(--gold); color:var(--ink);
+    padding:15px 4px; border-radius:6px; font-size:15px; cursor:pointer; text-align:center; font-weight:bold; }
+  .cmd-btn:active{ background:var(--gold); color:#000; }
+  .cmd-btn.disabled{ opacity:0.35; pointer-events:none; }
+
+  .generals{ margin-top:6px; }
+  .generals.collapsed{ max-height:0; overflow:hidden; margin:0; }
+  .gen-row{ display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--panel2);
+    border-radius:5px; margin-bottom:5px; font-size:14px; }
+  .gen-row .gname{ font-weight:bold; color:var(--gold); min-width:60px; font-size:15px; }
+  .pbadge{ display:inline-block; margin-left:5px; padding:1px 6px; border-radius:8px;
+    font-size:10px; color:#1a1208; font-weight:bold; vertical-align:middle; }
+  .apt-group{ display:flex; gap:3px; }
+  .apt-cell{ font-size:11px; padding:2px 5px; border-radius:8px; background:#1a1510;
+    border:1px solid var(--line); color:#888; }
+  .apt-cell.apt-hi{ color:#ffd97a; border-color:#7a6530; }
+  .apt-cell.apt-best{ background:#3a2f1c; color:#ffd700; border-color:var(--gold); font-weight:bold; }
+  .gen-row .gstat{ color:var(--ink2); font-size:12px; margin-left:auto; }
+  .tt-badge{ font-size:12px; padding:2px 7px; border-radius:10px; font-weight:bold; }
+  .tt-cav{ background:#5a2d2d; color:#ffb3b3; }
+  .tt-inf{ background:#2d4a5a; color:#b3d9ff; }
+  .tt-arc{ background:#2d5a3a; color:#b3ffcc; }
+  .stat-mini{ display:flex; flex-wrap:wrap; gap:6px 14px; font-size:14px; color:var(--ink2);
+    padding:10px 2px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin:10px 0; }
+  .stat-mini b{ color:var(--gold); }
+  .gen-header{ display:flex; align-items:center; justify-content:space-between; padding:8px 4px;
+    font-size:13px; color:var(--ink2); cursor:pointer; }
+  .gen-toggle{ color:var(--gold); font-weight:bold; }
+  .acted-note{ text-align:center; color:#c88; margin-top:6px; font-size:12px; }
+
+  /* 출병 편성 UI */
+  .form-info{ display:flex; justify-content:space-around; padding:8px; background:var(--panel2);
+    border-radius:6px; margin-bottom:8px; font-size:14px; }
+  .form-info b{ color:var(--gold); }
+  .form-row{ display:flex; align-items:center; gap:6px; padding:8px 6px; background:#241c10;
+    border:1px solid var(--line); border-radius:6px; margin-bottom:6px; }
+  .form-row.on{ border-color:var(--gold); background:#2e2512; }
+  .form-row.dis{ opacity:0.45; }
+  .fr-check{ width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--gold); border-radius:5px; color:var(--gold); font-weight:bold; cursor:pointer; flex-shrink:0; }
+  .fr-name{ font-size:13px; font-weight:bold; color:var(--ink); min-width:52px; line-height:1.3; }
+  .fr-name .fr-stat{ font-size:10px; color:var(--ink2); font-weight:normal; }
+  .fr-tt{ display:flex; gap:3px; }
+  .fr-tt .ttpick{ min-width:34px; height:30px; display:flex; align-items:center; justify-content:center; gap:1px;
+    border:1px solid var(--line); border-radius:5px; cursor:pointer; font-size:13px; }
+  .fr-tt .ttpick.sel{ border-color:var(--gold); background:var(--gold); }
+  .fr-tt .ttpick .ttgrade{ font-size:10px; color:#999; }
+  .fr-tt .ttpick .ttgrade.g-hi{ color:#ffd700; }
+  .fr-tt .ttpick.sel .ttgrade{ color:#000; }
+  .fr-troops{ display:flex; align-items:center; gap:4px; margin-left:auto; }
+  .fr-troops button{ width:26px; height:26px; border:1px solid var(--gold); background:var(--panel2);
+    color:var(--gold); border-radius:5px; font-size:15px; cursor:pointer; }
+  .fr-troops span{ min-width:44px; text-align:center; font-size:12px; color:var(--ink); }
+
+  /* End turn button */
+  #endturn{ position:absolute; right:12px; bottom:12px; z-index:5; background:linear-gradient(#c0392b,#8b1a1a);
+    color:#fff; border:2px solid var(--gold); border-radius:10px; padding:12px 18px; font-size:15px;
+    font-weight:bold; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,.5); }
+  #endturn.hidden{ display:none; }
+
+  /* Modal */
+  .modal-bg{ position:absolute; inset:0; background:rgba(0,0,0,.75); z-index:20; display:flex;
+    align-items:center; justify-content:center; padding:20px; }
+  .modal-bg.hidden{ display:none; }
+  .modal{ background:var(--panel); border:2px solid var(--gold); border-radius:10px; max-width:520px;
+    width:100%; max-height:85vh; overflow-y:auto; }
+  .modal h3{ background:var(--panel2); color:var(--gold); padding:10px 14px; font-size:16px;
+    border-bottom:1px solid var(--line); }
+  .modal .mbody{ padding:14px; font-size:13px; line-height:1.6; }
+  .modal .mfoot{ padding:10px 14px; display:flex; gap:8px; justify-content:flex-end; border-top:1px solid var(--line); }
+  .btn{ background:var(--panel2); border:1px solid var(--gold); color:var(--ink); padding:8px 16px;
+    border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn.primary{ background:var(--gold); color:#000; font-weight:bold; }
+
+  .listitem{ display:flex; align-items:center; gap:8px; padding:8px; background:var(--panel2);
+    border-radius:5px; margin-bottom:6px; cursor:pointer; }
+  .listitem:active{ background:var(--line); }
+  .listitem.sel{ border:1px solid var(--gold); }
+
+  /* 세력 선택 */
+  .fac-pick{ background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .fac-pick:active{ background:var(--line); border-color:var(--gold); }
+  .fac-head{ display:flex; align-items:center; gap:8px; font-size:16px; color:var(--gold); margin-bottom:4px; }
+  .fac-desc{ font-size:12px; color:var(--ink2); line-height:1.4; }
+
+  /* 연합 상태 배지 */
+  .alliance-badge{ display:inline-block; background:#1a3a1a; border:1px solid #4a7c3a; color:#8fd;
+    padding:2px 7px; border-radius:9px; font-size:11px; font-weight:bold; white-space:nowrap; flex-shrink:0; }
+
+  /* Battle overlay */
+  #battle{ position:absolute; inset:0; z-index:30; background:#0d0b06; display:none; flex-direction:column; }
+  #battle.show{ display:flex; }
+  #bhead{ background:var(--panel2); padding:8px 12px; display:flex; align-items:center; gap:10px;
+    border-bottom:2px solid var(--gold); font-size:13px; }
+  #bhead .bt{ color:var(--gold); font-weight:bold; }
+  #bmapwrap{ flex:1; overflow:hidden; position:relative; }
+  #bsvg{ width:100%; height:100%; touch-action:none; cursor:grab; }
+  #bsvg:active{ cursor:grabbing; }
+  /* 화면 흔들림 */
+  @keyframes shk-s { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-3px,2px)} 50%{transform:translate(3px,-2px)} 75%{transform:translate(-2px,-2px)} }
+  @keyframes shk-m { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-6px,3px)} 40%{transform:translate(6px,-3px)} 60%{transform:translate(-5px,-4px)} 80%{transform:translate(5px,4px)} }
+  @keyframes shk-l { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-10px,5px)} 30%{transform:translate(10px,-6px)} 45%{transform:translate(-9px,-7px)} 60%{transform:translate(9px,7px)} 75%{transform:translate(-6px,4px)} }
+  .shake-s{ animation:shk-s .3s; } .shake-m{ animation:shk-m .4s; } .shake-l{ animation:shk-l .5s; }
+  /* 데미지 팝업 */
+  #bmapwrap{ position:relative; }
+  .dmg-pop{ position:absolute; transform:translate(-50%,-50%); font-weight:bold; font-size:20px;
+    color:#fff; text-shadow:0 0 4px #000,0 2px 4px #000; pointer-events:none; z-index:10;
+    animation:dmgUp .9s ease-out forwards; }
+  .dmg-pop.crit{ color:#ffd234; font-size:26px; }
+  .dmg-pop.counter{ color:#ff9c6e; font-size:16px; }
+  .dmg-pop.heal{ color:#8fffaa; }
+  @keyframes dmgUp{ 0%{opacity:0;transform:translate(-50%,-30%) scale(.6)} 20%{opacity:1;transform:translate(-50%,-60%) scale(1.15)} 100%{opacity:0;transform:translate(-50%,-140%) scale(1)} }
+  /* 타격 플래시 */
+  .hit-flash{ position:absolute; width:70px; height:70px; transform:translate(-50%,-50%); pointer-events:none; z-index:9;
+    background:radial-gradient(circle, rgba(255,220,120,.9) 0%, rgba(255,120,40,.5) 40%, transparent 70%);
+    border-radius:50%; animation:flash .4s ease-out forwards; }
+  @keyframes flash{ 0%{opacity:0;transform:translate(-50%,-50%) scale(.3)} 30%{opacity:1;transform:translate(-50%,-50%) scale(1.2)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.6)} }
+  /* 전체화면 임팩트 플래시 */
+  #impactFlash{ position:absolute; inset:0; z-index:35; pointer-events:none; opacity:0; background:radial-gradient(circle at center, rgba(255,240,200,.5), transparent 60%); }
+  #impactFlash.go{ animation:impFlash .28s ease-out; }
+  @keyframes impFlash{ 0%{opacity:0} 15%{opacity:1} 100%{opacity:0} }
+  #impactFlash.red{ background:radial-gradient(circle at center, rgba(255,80,60,.55), transparent 60%); }
+  /* 파티클(병사 흩어짐) */
+  .particle{ position:absolute; width:6px; height:6px; border-radius:50%; pointer-events:none; z-index:11; }
+  /* 일기토 집중선 */
+  #focusLines{ position:absolute; inset:0; z-index:34; pointer-events:none; opacity:0;
+    background:repeating-conic-gradient(from 0deg at 50% 50%, rgba(0,0,0,.55) 0deg 3deg, transparent 3deg 9deg); }
+  #focusLines.go{ animation:focusIn .6s ease-out; }
+  @keyframes focusIn{ 0%{opacity:0;transform:scale(1.6)} 40%{opacity:.9} 100%{opacity:0;transform:scale(1)} }
+  /* 참격 슬래시 */
+  .slash{ position:absolute; width:120px; height:8px; transform-origin:center; pointer-events:none; z-index:12;
+    background:linear-gradient(90deg,transparent, #fff, transparent); border-radius:4px; }
+  .slash.go{ animation:slashAnim .3s ease-out forwards; }
+  @keyframes slashAnim{ 0%{opacity:0;transform:translate(-50%,-50%) rotate(-35deg) scaleX(.2)} 40%{opacity:1} 100%{opacity:0;transform:translate(-50%,-50%) rotate(-35deg) scaleX(1.3)} }
+  /* 오디오 토글 */
+  #bhead .bfx{ margin-left:auto; display:flex; gap:6px; }
+  #bhead .bfx button{ background:var(--panel2); border:1px solid var(--gold); color:var(--gold);
+    border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  #bhead .bfx button.off{ opacity:.5; }
+  .hex{ cursor:pointer; }
+  #bbottom{ background:var(--panel); border-top:2px solid var(--gold); padding:8px 12px; min-height:70px; }
+  #bcmd{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .hexunit-label{ font-size:9px; fill:#fff; text-anchor:middle; pointer-events:none; font-weight:bold;
+    paint-order:stroke; stroke:#000; stroke-width:2px; }
+
+  .toast{ position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:50;
+    background:rgba(0,0,0,.85); border:1px solid var(--gold); color:var(--gold); padding:10px 18px;
+    border-radius:8px; font-size:14px; font-weight:bold; opacity:0; transition:opacity .3s; pointer-events:none; }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="tb-row1">
+      <span class="title">群雄割據</span>
+      <span class="date" id="date">190년 1월</span>
+      <span id="allianceBadge"></span>
+      <div class="topbtns">
+        <button class="tbtn" onclick="doSave()" title="저장">💾</button>
+        <button class="tbtn" onclick="doLoad()" title="불러오기">📁</button>
+      </div>
+    </div>
+    <div class="res" id="res"></div>
+  </div>
+  <div id="msgstrip"><div id="msglist"></div></div>
+  <div id="mapwrap">
+    <svg id="mapsvg" viewBox="30 20 620 730" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="zoomctrl">
+      <button class="zin">＋</button>
+      <button class="zout">－</button>
+      <button class="zreset">⌂</button>
+    </div>
+    <button id="endturn">다음 달 ▶</button>
+  </div>
+  <div id="bottom" class="hidden"></div>
+</div>
+
+<div class="modal-bg hidden" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">제목</h3>
+    <div class="mbody" id="modal-body"></div>
+    <div class="mfoot" id="modal-foot"></div>
+  </div>
+</div>
+
+<div id="battle">
+  <div id="bhead"><span class="bt" id="btitle">전투</span><span id="bturn"></span>
+    <span class="bfx"><button id="fxToggle" onclick="toggleFX()">🔊</button></span></div>
+  <div id="bmapwrap"><svg id="bsvg" viewBox="0 0 765 645" preserveAspectRatio="xMidYMid meet"></svg><div id="impactFlash"></div><div id="focusLines"></div></div>
+  <div id="bbottom"><div id="binfo">부대를 선택하세요.</div><div id="bcmd"></div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   삼국지 群雄割據 v0.1
+   - 내정: 삼국지 2식 커맨드 방식
+   - 전투: 삼국지 3식 헥스맵 전략전투
+   ============================================================ */
+
+const G = {
+  turn: 1, year: 190, month: 1,
+  playerFaction: 0,
+  cities: [], factions: [], generals: [],
+  selectedCity: null,
+  actionsLeft: {}, // cityId -> bool (한 도시 한 달 1커맨드)
+  alliance: { active:false, target:1, endTurn:13 },
+  scenario: 's190',
+  eventFlags: {},
+  pendingDefense: [],
+};
+
+/* ---------- 데이터: 세력 (190년 반동탁연합 고증) ---------- */
+const FACTIONS = [
+  { name:'조조', color:'#2b6cb0' },{ name:'동탁', color:'#9b2c2c' },{ name:'원소', color:'#6b46c1' },
+  { name:'한복', color:'#b7791f' },{ name:'손견', color:'#c53030' },{ name:'원술', color:'#b83280' },
+  { name:'유표', color:'#2f855a' },{ name:'공손찬',color:'#4299e1' },{ name:'마등', color:'#c05621' },
+  { name:'유언', color:'#38a169' },{ name:'도겸', color:'#718096' },{ name:'공융', color:'#805ad5' },
+  { name:'유대', color:'#3182ce' },{ name:'공주', color:'#dd6b20' },{ name:'장로', color:'#00897b' },
+  { name:'사섭', color:'#00838f' },
+];
+
+/* ---------- 데이터: 25도시 (실제 지리 배치, viewBox 900x680) ---------- */
+const SCENARIOS = {
+  's190': {"name": "반동탁 연합", "year": 190, "month": 1, "desc": "190년. 동탁이 낙양을 장악하고 폭정을 일삼자 원소를 맹주로 관동 제후들이 연합했다. 가장 인기있는 표준 시나리오.", "alliance": true, "cityOwner": {}, "genMove": {}, "playable": [0, 1, 2, 4, 5, 6, 7, 9]},
+  's194': {"name": "군웅할거", "year": 194, "month": 6, "desc": "194년. 동탁은 여포에게 주살되고 연합은 와해됐다. 조조는 연주를, 유비는 서주를 얻었고 손책이 강동에 거병한다. 절대강자 없는 난세.", "alliance": false, "cityOwner": {"낙양": -1, "장안": 1, "홍농": 1, "천수": 8, "무위": 8, "안정": 8, "진류": 0, "허창": 0, "초": 0, "복양": 0, "산양": 0, "하비": 10, "소패": 10, "광릉": 10, "완": 5, "수춘": 5, "남피": 2, "업": 2, "평원": 2, "북평": 7, "계": 7, "양평": 7, "장사": 4, "강하": 4, "강릉": 4, "양양": 6, "무릉": 6, "성도": 9, "강주": 9, "재동": 9, "한중": 14, "북해": 11, "제남": -1, "여남": -1}, "genMove": {"동탁": null, "화웅": null, "곽사": null, "여포": "소패", "장료": "소패", "진궁": "소패", "가후": "장안", "이각": "장안", "손책": "장사", "손견": null, "한복": null}, "factionDead": [3, 13, 12], "playable": [0, 2, 4, 5, 6, 7, 9, 10]},
+  's200': {"name": "관도대전", "year": 200, "month": 2, "desc": "200년. 조조는 헌제를 옹립하고 중원을 장악, 원소는 하북을 통일했다. 두 거인이 관도에서 천하를 두고 격돌한다.", "alliance": false, "cityOwner": {"진류": 0, "허창": 0, "초": 0, "복양": 0, "산양": 0, "낙양": 0, "홍농": 0, "여남": 0, "완": 0, "하비": 0, "소패": 0, "광릉": 0, "장안": 0, "남피": 2, "업": 2, "평원": 2, "북해": 2, "제남": 2, "진양": 2, "상당": 2, "북평": 2, "계": 2, "양평": 2, "양양": 6, "강릉": 6, "강하": 6, "무릉": 6, "장사": 6, "건업": 4, "오": 4, "회계": 4, "예장": 4, "수춘": 4, "성도": 9, "강주": 9, "재동": 9, "한중": 14, "천수": 8, "무위": 8, "안정": 8}, "genMove": {"손견": null, "손책": null, "여포": null, "화웅": null, "동탁": null, "곽사": null, "이각": null, "공손찬": null, "유비": "여남", "관우": "여남", "장비": "여남", "조운": "여남", "유언": null, "한복": null}, "factionDead": [1, 3, 7, 10, 11, 12, 13, 5], "playable": [0, 2, 6, 4, 9]},
+};
+
+const CITY_DEFS=[
+  {id:0,name:'북평',x:430,y:70,prov:'유주',owner:7,links:[1, 2]},
+  {id:1,name:'계',x:370,y:85,prov:'유주',owner:7,links:[0, 3, 5]},
+  {id:2,name:'양평',x:500,y:55,prov:'유주',owner:7,links:[0]},
+  {id:3,name:'진양',x:300,y:160,prov:'병주',owner:-1,links:[1, 4, 6, 16]},
+  {id:4,name:'상당',x:340,y:200,prov:'병주',owner:-1,links:[3, 6, 16]},
+  {id:5,name:'남피',x:440,y:150,prov:'기주',owner:2,links:[1, 6, 7]},
+  {id:6,name:'업',x:385,y:205,prov:'기주',owner:3,links:[3, 4, 5, 7, 16, 17, 18]},
+  {id:7,name:'평원',x:470,y:195,prov:'기주',owner:3,links:[5, 6, 8, 9]},
+  {id:8,name:'북해',x:530,y:200,prov:'청주',owner:11,links:[7, 9]},
+  {id:9,name:'제남',x:490,y:235,prov:'청주',owner:-1,links:[7, 8, 18, 24]},
+  {id:10,name:'무위',x:70,y:175,prov:'서량',owner:8,links:[11]},
+  {id:11,name:'천수',x:120,y:230,prov:'서량',owner:8,links:[10, 12]},
+  {id:12,name:'안정',x:175,y:210,prov:'서량',owner:8,links:[11, 13]},
+  {id:13,name:'장안',x:230,y:260,prov:'사례',owner:1,links:[12, 14, 26]},
+  {id:14,name:'홍농',x:290,y:270,prov:'사례',owner:1,links:[13, 15]},
+  {id:15,name:'낙양',x:340,y:275,prov:'사례',owner:1,links:[14, 16, 17, 31]},
+  {id:16,name:'하내',x:355,y:235,prov:'사례',owner:-1,links:[3, 4, 6, 15]},
+  {id:17,name:'진류',x:410,y:265,prov:'연주',owner:0,links:[6, 15, 18, 19, 20]},
+  {id:18,name:'복양',x:445,y:240,prov:'연주',owner:12,links:[6, 9, 17, 19]},
+  {id:19,name:'산양',x:460,y:285,prov:'연주',owner:12,links:[17, 18, 20, 22, 24]},
+  {id:20,name:'허창',x:390,y:315,prov:'예주',owner:-1,links:[17, 19, 21, 22, 31]},
+  {id:21,name:'여남',x:420,y:350,prov:'예주',owner:13,links:[20, 22, 31, 38]},
+  {id:22,name:'초',x:460,y:330,prov:'예주',owner:0,links:[19, 20, 21, 24]},
+  {id:23,name:'하비',x:510,y:305,prov:'서주',owner:10,links:[24, 25, 38]},
+  {id:24,name:'소패',x:480,y:300,prov:'서주',owner:10,links:[9, 19, 22, 23]},
+  {id:25,name:'광릉',x:545,y:350,prov:'서주',owner:10,links:[23, 38, 40]},
+  {id:26,name:'한중',x:195,y:330,prov:'익주',owner:14,links:[13, 27, 29, 31]},
+  {id:27,name:'성도',x:120,y:410,prov:'익주',owner:9,links:[26, 28, 29]},
+  {id:28,name:'강주',x:190,y:445,prov:'익주',owner:9,links:[27, 29, 30]},
+  {id:29,name:'재동',x:145,y:370,prov:'익주',owner:9,links:[26, 27, 28]},
+  {id:30,name:'건녕',x:165,y:520,prov:'익주',owner:-1,links:[28, 36]},
+  {id:31,name:'완',x:320,y:350,prov:'형주',owner:5,links:[15, 20, 21, 26, 32]},
+  {id:32,name:'양양',x:300,y:400,prov:'형주',owner:6,links:[31, 33, 34, 36]},
+  {id:33,name:'강릉',x:310,y:460,prov:'형주',owner:6,links:[32, 34, 35, 36]},
+  {id:34,name:'강하',x:385,y:445,prov:'형주',owner:6,links:[32, 33, 35, 38, 43]},
+  {id:35,name:'장사',x:340,y:530,prov:'형주',owner:4,links:[33, 34, 36, 37, 43]},
+  {id:36,name:'무릉',x:275,y:500,prov:'형주',owner:6,links:[30, 32, 33, 35]},
+  {id:37,name:'계양',x:355,y:600,prov:'형주',owner:-1,links:[35, 44]},
+  {id:38,name:'수춘',x:470,y:385,prov:'양주',owner:5,links:[21, 23, 25, 34, 39]},
+  {id:39,name:'여강',x:490,y:425,prov:'양주',owner:-1,links:[38, 40, 43]},
+  {id:40,name:'건업',x:555,y:410,prov:'양주',owner:-1,links:[25, 39, 41, 43]},
+  {id:41,name:'오',x:585,y:445,prov:'양주',owner:-1,links:[40, 42]},
+  {id:42,name:'회계',x:570,y:510,prov:'양주',owner:-1,links:[41, 43]},
+  {id:43,name:'예장',x:445,y:500,prov:'양주',owner:-1,links:[34, 35, 39, 40, 42]},
+  {id:44,name:'남해',x:420,y:660,prov:'교주',owner:15,links:[37, 45]},
+  {id:45,name:'교지',x:310,y:700,prov:'교주',owner:15,links:[44]},
+];
+
+/* ---------- 데이터: 무장 (능력치: 무력/통솔/지력/정치) ---------- */
+// 무장 성격·대사
+const ARCHETYPES = {"brave": {"label": "호걸", "color": "#e0603a", "trait": "용맹하고 저돌적. 강적일수록 투지가 오른다."}, "wise": {"label": "지장", "color": "#4a90d0", "trait": "침착하고 계략에 능하다. 불리해도 냉정하다."}, "loyal": {"label": "충의", "color": "#4aa84a", "trait": "주군에 대한 충심이 깊다. 사기가 잘 떨어지지 않는다."}, "ambitious": {"label": "야심", "color": "#c060c0", "trait": "천하를 노리는 야심가. 승세에서 강하다."}, "cold": {"label": "냉철", "color": "#8890a0", "trait": "감정에 흔들리지 않는다. 상성 영향이 적다."}, "plain": {"label": "평범", "color": "#a09070", "trait": "평범하고 무난한 성정."}};
+const REL_LABEL = {"sworn": "의형제", "lord": "군신", "rival": "라이벌", "foe": "숙적"};
+const PERSONA = {"조조": {"arch": "ambitious", "lines": {"battle": ["난세의 간웅, 조조가 간다.", "치세의 능신이 될 수는 없는 노릇."], "win": ["하하하! 천하가 내 손 안에 있다!"], "lose": ["닭갈비인가… 물러난다."], "duel": ["영웅은 나 하나로 족하다."]}}, "하후돈": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "하후연": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "조인": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "조홍": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "악진": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "이전": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "전위": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "동탁": {"arch": "ambitious", "lines": {"battle": ["천하는 내 손아귀에 있다."], "win": ["거역하는 자는 죽음뿐이다."], "lose": ["이 동탁이…!"], "duel": ["버러지가 감히."]}}, "여포": {"arch": "brave", "lines": {"battle": ["천하무적 여포, 여기 있다!", "내 방천화극을 받아라!"], "win": ["날 막을 자 누구냐!"], "lose": ["이 여포가… 크윽!"], "duel": ["적토마 위의 나를 이길 자 없다!"]}}, "이유": {"arch": "cold", "lines": {"battle": ["불필요한 말은 않겠다.", "끝내주지.", "냉정하게 처리한다."], "win": ["당연한 결과.", "."], "lose": ["…계산 착오.", "물러난다."], "duel": ["시간 낭비군.", "간단히 끝내지."]}}, "화웅": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "이각": {"arch": "cold", "lines": {"battle": ["불필요한 말은 않겠다.", "끝내주지.", "냉정하게 처리한다."], "win": ["당연한 결과.", "."], "lose": ["…계산 착오.", "물러난다."], "duel": ["시간 낭비군.", "간단히 끝내지."]}}, "곽사": {"arch": "cold", "lines": {"battle": ["불필요한 말은 않겠다.", "끝내주지.", "냉정하게 처리한다."], "win": ["당연한 결과.", "."], "lose": ["…계산 착오.", "물러난다."], "duel": ["시간 낭비군.", "간단히 끝내지."]}}, "장제": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "번조": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "우보": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "가후": {"arch": "cold", "lines": {"battle": ["독사의 계, 피할 수 있겠나."], "win": ["예상대로군."], "lose": ["이번엔 물러나지."], "duel": ["어리석은 짓이다."]}}, "장료": {"arch": "loyal", "lines": {"battle": ["안문 장문원, 나선다."], "win": ["소요진의 위엄을 보라."], "lose": ["물러서겠다…"], "duel": ["정정당당히 겨루자."]}}, "원소": {"arch": "ambitious", "lines": {"battle": ["사세삼공의 명문, 원소가 간다."], "win": ["명문의 위엄이다."], "lose": ["어찌 이런 일이…"], "duel": ["천한 것이 감히."]}}, "안량": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "문추": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "저수": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "전풍": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "한복": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "국의": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "모개": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "손견": {"arch": "brave", "lines": {"battle": ["강동의 호랑이, 손견이다!"], "win": ["강동 앞에 적은 없다!"], "lose": ["크윽…!"], "duel": ["호랑이의 무서움을 보여주마!"]}}, "정보": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "황개": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "한당": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "조무": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "손책": {"arch": "brave", "lines": {"battle": ["소패왕 손책이 간다!", "강동의 힘을 보여주마!"], "win": ["강동은 무적이다!"], "lose": ["분하다…!"], "duel": ["나와 겨룰 텐가!"]}}, "원술": {"arch": "ambitious", "lines": {"battle": ["천하는 내 것이다.", "이 또한 대업의 발판.", "야망을 막을 자는 없다."], "win": ["천하가 한 걸음 가까워졌다.", "예정된 승리다."], "lose": ["아직… 끝나지 않았다…", "일시적 후퇴일 뿐."], "duel": ["감히 내 앞을 막다니.", "대업에 방해가 되는군."]}}, "기령": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "교유": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "뇌박": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "진란": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "유표": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "괴량": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "괴월": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "채모": {"arch": "ambitious", "lines": {"battle": ["천하는 내 것이다.", "이 또한 대업의 발판.", "야망을 막을 자는 없다."], "win": ["천하가 한 걸음 가까워졌다.", "예정된 승리다."], "lose": ["아직… 끝나지 않았다…", "일시적 후퇴일 뿐."], "duel": ["감히 내 앞을 막다니.", "대업에 방해가 되는군."]}}, "황조": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "문빙": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "감녕": {"arch": "brave", "lines": {"battle": ["금범적 감녕, 나선다!"], "win": ["비단 돛이 승리를 부른다!"], "lose": ["이번엔 졌군…"], "duel": ["방울 소리를 들려주마!"]}}, "공손찬": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "유비": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "관우": {"arch": "loyal", "lines": {"battle": ["관운장이 간다.", "청룡언월도가 운다."], "win": ["의를 저버린 자의 최후다."], "lose": ["면목이… 없구나…"], "duel": ["내 칼을 받을 자격이 있느냐."]}}, "장비": {"arch": "brave", "lines": {"battle": ["연인 장익덕이 여기 있다!", "목을 내놓아라!"], "win": ["으하하! 한 놈도 못 당하는군!"], "lose": ["이 장비가 지다니!"], "duel": ["덤벼라! 한 방에 끝내주마!"]}}, "조운": {"arch": "loyal", "lines": {"battle": ["상산의 조자룡, 나선다.", "한 치도 물러서지 않는다."], "win": ["주군을 지켜냈다."], "lose": ["아직… 쓰러질 수 없다…"], "duel": ["내 창을 받아라!"]}}, "전예": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "엄강": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "마등": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "한수": {"arch": "ambitious", "lines": {"battle": ["천하는 내 것이다.", "이 또한 대업의 발판.", "야망을 막을 자는 없다."], "win": ["천하가 한 걸음 가까워졌다.", "예정된 승리다."], "lose": ["아직… 끝나지 않았다…", "일시적 후퇴일 뿐."], "duel": ["감히 내 앞을 막다니.", "대업에 방해가 되는군."]}}, "마초": {"arch": "brave", "lines": {"battle": ["금마초, 서량의 이름을 걸고!", "아버지의 원수를 갚겠다!"], "win": ["서량 기병이 최강이다!"], "lose": ["크윽… 아직이다…"], "duel": ["이 창끝을 받아라!"]}}, "방덕": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "마대": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "유언": {"arch": "ambitious", "lines": {"battle": ["천하는 내 것이다.", "이 또한 대업의 발판.", "야망을 막을 자는 없다."], "win": ["천하가 한 걸음 가까워졌다.", "예정된 승리다."], "lose": ["아직… 끝나지 않았다…", "일시적 후퇴일 뿐."], "duel": ["감히 내 앞을 막다니.", "대업에 방해가 되는군."]}}, "엄안": {"arch": "brave", "lines": {"battle": ["이 몸이 상대해주마!", "한칼에 베어주지!", "전장이야말로 사내의 무대!"], "win": ["하하! 별것 아니로군!", "내 앞을 막지 마라!"], "lose": ["크윽… 이럴 수가…", "분하다…!"], "duel": ["좋다, 나와 겨뤄보자!", "네놈의 목을 받아가마!"]}}, "오의": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "장임": {"arch": "loyal", "lines": {"battle": ["주군을 위해!", "충의로 맞서겠다!", "물러설 수 없다!"], "win": ["주군의 은혜에 보답했다.", "충심이 이겼다!"], "lose": ["주군… 면목이 없습니다…", "더 지키지 못하다니…"], "duel": ["대의를 위해 물러서지 않는다!", "내 검은 주군의 것이다!"]}}, "법정": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "도겸": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "조표": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "진등": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "미축": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "손건": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "공융": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "태사자": {"arch": "loyal", "lines": {"battle": ["동래 태사자, 활을 겨눈다."], "win": ["내 화살은 빗나가지 않는다."], "lose": ["한 발… 부족했군…"], "duel": ["활과 창, 무엇으로 겨룰까."]}}, "유대": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "교모": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "공주": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "장로": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "사섭": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "사일": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}, "진궁": {"arch": "wise", "lines": {"battle": ["이미 승패는 정해져 있다.", "계략에 걸린 줄도 모르는군.", "병법을 아는가?"], "win": ["예상대로다.", "계산대로군."], "lose": ["이 수를 놓쳤는가…", "천운이 따르지 않았다."], "duel": ["필부의 만용이로군.", "머리를 쓸 줄 모르는가."]}}, "장막": {"arch": "plain", "lines": {"battle": ["한번 붙어보자!", "최선을 다하겠다.", "물러서지 않겠다!"], "win": ["이겼다!", "해냈군."], "lose": ["졌는가…", "아쉽군…"], "duel": ["좋다, 겨뤄보자!", "도전을 받아주지!"]}}};
+const RELATIONS = [{"a": "유비", "b": "관우", "type": "sworn", "bond": 15}, {"a": "유비", "b": "장비", "type": "sworn", "bond": 15}, {"a": "관우", "b": "장비", "type": "sworn", "bond": 15}, {"a": "유비", "b": "조운", "type": "lord", "bond": 10}, {"a": "조조", "b": "하후돈", "type": "lord", "bond": 12}, {"a": "조조", "b": "하후연", "type": "lord", "bond": 10}, {"a": "조조", "b": "조인", "type": "lord", "bond": 10}, {"a": "조조", "b": "전위", "type": "lord", "bond": 10}, {"a": "손견", "b": "손책", "type": "sworn", "bond": 12}, {"a": "손책", "b": "주유", "type": "sworn", "bond": 12}, {"a": "손견", "b": "정보", "type": "lord", "bond": 10}, {"a": "손견", "b": "황개", "type": "lord", "bond": 10}, {"a": "손견", "b": "한당", "type": "lord", "bond": 10}, {"a": "마등", "b": "마초", "type": "sworn", "bond": 12}, {"a": "마초", "b": "마대", "type": "sworn", "bond": 10}, {"a": "마초", "b": "방덕", "type": "lord", "bond": 10}, {"a": "마등", "b": "한수", "type": "rival", "bond": 5}, {"a": "여포", "b": "동탁", "type": "rival", "bond": -5}, {"a": "여포", "b": "진궁", "type": "lord", "bond": 8}, {"a": "여포", "b": "유비", "type": "foe", "bond": -10}, {"a": "여포", "b": "조조", "type": "foe", "bond": -10}, {"a": "마초", "b": "조조", "type": "foe", "bond": -15}, {"a": "관우", "b": "안량", "type": "foe", "bond": -8}, {"a": "관우", "b": "문추", "type": "foe", "bond": -8}, {"a": "손견", "b": "황조", "type": "foe", "bond": -12}, {"a": "조조", "b": "원소", "type": "rival", "bond": -8}, {"a": "동탁", "b": "원소", "type": "foe", "bond": -10}, {"a": "가후", "b": "이각", "type": "lord", "bond": 6}, {"a": "이각", "b": "곽사", "type": "rival", "bond": -5}, {"a": "원소", "b": "안량", "type": "lord", "bond": 10}, {"a": "원소", "b": "문추", "type": "lord", "bond": 10}, {"a": "원소", "b": "저수", "type": "lord", "bond": 8}, {"a": "원소", "b": "전풍", "type": "lord", "bond": 8}, {"a": "저수", "b": "전풍", "type": "sworn", "bond": 8}, {"a": "유표", "b": "괴량", "type": "lord", "bond": 8}, {"a": "유표", "b": "괴월", "type": "lord", "bond": 8}, {"a": "괴량", "b": "괴월", "type": "sworn", "bond": 10}, {"a": "유표", "b": "채모", "type": "lord", "bond": 6}, {"a": "유표", "b": "황조", "type": "lord", "bond": 6}, {"a": "유표", "b": "문빙", "type": "lord", "bond": 8}];
+
+const GEN_DEFS=[
+  ['조조',72,94,92,95,0,17,3,3,3],
+  ['하후돈',90,89,58,62,0,17,3,3,2],
+  ['하후연',91,86,62,58,0,17,4,2,3],
+  ['조인',86,89,68,66,0,22,2,4,2],
+  ['조홍',80,78,45,50,0,22,2,3,2],
+  ['악진',88,80,55,52,0,17,2,4,2],
+  ['이전',79,82,72,68,0,17,2,3,3],
+  ['전위',95,80,40,35,0,17,1,4,2],
+  ['동탁',87,82,66,42,1,15,3,2,2],
+  ['여포',100,90,45,26,1,15,4,3,2],
+  ['이유',30,68,95,85,1,13,1,2,3],
+  ['화웅',92,76,40,30,1,15,3,3,1],
+  ['이각',82,76,62,45,1,13,3,2,2],
+  ['곽사',80,74,50,40,1,13,3,2,2],
+  ['장제',76,72,52,48,1,14,2,3,2],
+  ['번조',78,70,40,38,1,14,3,2,1],
+  ['우보',74,70,55,45,1,15,2,3,2],
+  ['가후',30,72,97,88,1,13,1,2,4],
+  ['장료',93,90,72,66,1,15,4,3,3],
+  ['원소',62,84,78,80,2,5,2,3,2],
+  ['안량',96,72,40,32,2,5,4,3,2],
+  ['문추',95,70,38,28,2,5,4,3,2],
+  ['저수',35,70,90,84,2,5,1,2,4],
+  ['전풍',28,60,92,80,2,5,1,1,4],
+  ['한복',22,50,55,60,3,6,1,2,2],
+  ['국의',88,82,58,48,3,6,3,4,3],
+  ['모개',30,58,78,82,3,7,1,2,3],
+  ['손견',90,90,72,70,4,35,3,4,2],
+  ['정보',82,84,68,72,4,35,3,3,2],
+  ['황개',85,82,60,55,4,35,2,4,3],
+  ['한당',83,80,55,50,4,35,3,3,3],
+  ['조무',78,72,48,44,4,35,2,3,2],
+  ['손책',92,88,70,66,4,35,4,4,2],
+  ['원술',40,66,50,55,5,31,2,2,2],
+  ['기령',84,80,55,50,5,38,3,3,2],
+  ['교유',75,68,50,45,5,31,2,3,2],
+  ['뇌박',72,66,42,40,5,38,2,3,2],
+  ['진란',70,64,44,42,5,38,2,3,2],
+  ['유표',40,74,80,84,6,32,1,3,3],
+  ['괴량',30,62,90,82,6,32,1,2,4],
+  ['괴월',35,66,86,84,6,32,1,2,4],
+  ['채모',68,74,58,60,6,33,2,3,3],
+  ['황조',72,72,50,48,6,34,2,3,3],
+  ['문빙',85,84,62,58,6,32,3,4,3],
+  ['감녕',94,82,58,50,6,34,4,3,3],
+  ['공손찬',86,84,66,60,7,0,4,3,3],
+  ['유비',73,80,76,88,7,1,2,3,2],
+  ['관우',97,95,75,62,7,1,3,4,3],
+  ['장비',98,85,45,30,7,1,4,4,1],
+  ['조운',96,90,76,72,7,0,4,3,3],
+  ['전예',60,72,74,70,7,2,2,3,3],
+  ['엄강',70,68,45,42,7,2,2,3,2],
+  ['마등',88,84,60,58,8,11,4,3,3],
+  ['한수',80,82,74,68,8,10,3,3,3],
+  ['마초',97,88,50,42,8,11,4,3,2],
+  ['방덕',92,84,58,52,8,12,4,3,4],
+  ['마대',84,80,60,56,8,12,4,3,3],
+  ['유언',35,66,72,80,9,27,1,3,2],
+  ['엄안',84,82,66,60,9,28,2,4,3],
+  ['오의',76,74,60,62,9,27,2,3,2],
+  ['장임',85,82,64,56,9,29,3,4,4],
+  ['법정',28,62,92,80,9,27,1,2,4],
+  ['도겸',30,60,64,70,10,23,1,2,2],
+  ['조표',70,66,45,44,10,24,2,3,2],
+  ['진등',40,68,86,84,10,23,1,2,4],
+  ['미축',25,50,60,80,10,25,1,1,2],
+  ['손건',30,55,72,76,10,23,1,2,3],
+  ['공융',22,55,82,80,11,8,1,2,3],
+  ['태사자',93,86,66,60,11,8,3,3,4],
+  ['유대',55,66,58,60,12,18,2,3,2],
+  ['교모',48,60,56,58,12,19,2,3,2],
+  ['공주',40,58,60,62,13,21,1,2,2],
+  ['장로',45,70,74,72,14,26,1,3,3],
+  ['사섭',50,70,78,82,15,44,1,3,3],
+  ['사일',55,66,55,58,15,45,1,3,2],
+  ['진궁',35,74,90,80,-1,18,1,2,4],
+  ['장막',45,64,68,66,-1,17,1,3,2],
+];
+
+/* ---------- 초기화 ---------- */
+// 대도시(요충지)일수록 규모 큼
+const BIG_CITIES = { '낙양':1.6,'장안':1.5,'업':1.4,'성도':1.4,'허창':1.3,'남피':1.2,'양양':1.2,'하비':1.15,'장사':1.1,'건업':1.15,'수춘':1.1,'북해':1.05,'완':1.15 };
+function init(scenarioKey, chosenFaction){
+  const scn = SCENARIOS[scenarioKey] || SCENARIOS['s190'];
+  G.scenario = scenarioKey || 's190';
+  G.factions = FACTIONS.map((f,i)=>({...f, id:i, alive:true}));
+  // 도시 기본 배치 + 시나리오 override
+  const nameToId={}; CITY_DEFS.forEach(c=>nameToId[c.name]=c.id);
+  G.cities = CITY_DEFS.map(c=>{
+    let owner = c.owner;
+    if(scn.cityOwner && scn.cityOwner[c.name]!==undefined) owner = scn.cityOwner[c.name];
+    const scale = BIG_CITIES[c.name] || 1.0;
+    const empty = owner===-1;
+    return {
+      ...c, owner, links:[...c.links],
+      pop: Math.floor((6000 + Math.random()*4000)*scale),
+      agri: Math.floor((250 + Math.random()*150)*scale),
+      comm: Math.floor((250 + Math.random()*150)*scale),
+      order: empty? 40+Math.floor(Math.random()*15) : 55 + Math.floor(Math.random()*25),
+      troops: empty? 0 : Math.floor((2000 + Math.random()*2500)*scale),
+      train: empty? 20+Math.floor(Math.random()*15) : 35 + Math.floor(Math.random()*25),
+      gold: Math.floor((300 + Math.random()*250)*scale),
+      food: Math.floor((1500 + Math.random()*1500)*scale),
+    };
+  });
+  // 무장 기본 배치
+  G.generals = GEN_DEFS.map((g,i)=>({
+    id:i, name:g[0], war:g[1], lead:g[2], int:g[3], pol:g[4],
+    faction:g[5], cityId: g[6],
+    apt:{ cav:g[7], inf:g[8], arc:g[9] }, dead:false,
+    persona: (PERSONA[g[0]] && PERSONA[g[0]].arch) || 'plain',
+  }));
+  // 시나리오 무장 이동/사망
+  if(scn.genMove){
+    for(const [gname,dest] of Object.entries(scn.genMove)){
+      const g=G.generals.find(x=>x.name===gname); if(!g) continue;
+      if(dest===null){ g.dead=true; g.cityId=-1; }
+      else if(nameToId[dest]!==undefined){ g.cityId=nameToId[dest]; }
+    }
+  }
+  // 죽은 무장 제거
+  G.generals = G.generals.filter(g=>!g.dead);
+  // 무장 소속을 도시 소유주에 맞게 재조정 (도시 주인이 바뀐 경우)
+  G.generals.forEach(g=>{
+    const city=G.cities[g.cityId];
+    if(city && city.owner>=0) g.faction=city.owner;
+  });
+  // 소멸 세력 처리
+  if(scn.factionDead){ scn.factionDead.forEach(fid=>{ if(G.factions[fid]) G.factions[fid].alive=false; }); }
+  // 동탁 강화(190 시나리오만)
+  if(scn.year===190) G.cities.forEach(c=>{ if(c.owner===1){ c.troops=Math.floor(c.troops*1.5); c.train+=15; } });
+  // 관도(200): 조조·원소 대세력 병력 강화
+  if(scn.year===200) G.cities.forEach(c=>{ if(c.owner===0||c.owner===2){ c.troops=Math.floor(c.troops*1.3); c.train+=10; } });
+
+  G.year=scn.year; G.month=scn.month; G.turn=1;
+  G.playerFaction = (chosenFaction!=null)? chosenFaction : 0;
+  G.alliance = scn.alliance ? { active:true, target:1, endTurn:13 } : { active:false, target:1, endTurn:0 };
+  G.eventFlags = { allianceFormed:!scn.alliance, allianceBroken:!scn.alliance, luoyangBurned:false };
+  const pf=G.factions[G.playerFaction];
+  startBgm('field'); // 평시 음악
+  renderAll();
+  log(`${scn.year}년 — ${scn.name} 시나리오 개막.`, true);
+  log(`그대는 ${pf.name} 세력의 군주다.`, true);
+  toast(`${scn.name} · ${pf.name}`);
+  if(scn.alliance){ setTimeout(()=>allianceFormEvent(), 600); }
+}
+
+/* ---------- 반동탁연합 이벤트 ---------- */
+function allianceFormEvent(){
+  if(G.eventFlags.allianceFormed) return;
+  G.eventFlags.allianceFormed=true;
+  const isDong = G.playerFaction===1;
+  const body = isDong
+    ? `<div style="line-height:1.8">190년 정월, <b style="color:#f99">원소를 맹주로 관동의 제후들이 반동탁 연합</b>을 결성했습니다.<br>
+       그대(동탁)는 사방의 적에 맞서야 합니다. 낙양·장안을 지키며 제후들을 각개격파하십시오.<br>
+       <span style="font-size:12px;color:#999">연합은 오래가지 못합니다. 1년가량 버티면 제후들이 서로 분열합니다.</span></div>`
+    : `<div style="line-height:1.8">190년 정월, <b style="color:#8fd">원소를 맹주로 한 반동탁 연합</b>이 결성되었습니다!<br>
+       그대도 이 연합에 가담하여 역적 동탁을 토벌합니다.<br>
+       <b>연합 기간 동안 동탁을 제외한 제후들은 서로 공격하지 않습니다.</b><br>
+       <span style="font-size:12px;color:#999">약 1년 뒤 연합이 붕괴하면 군웅할거의 난세가 시작됩니다. 그동안 내정을 다지고 동탁을 치십시오.</span></div>`;
+  showModal('⚔️ 반동탁 연합 결성', body, [{label:'출진!',cls:'primary',fn:closeModal}]);
+  log('반동탁 연합 결성! 동탁을 제외한 제후들이 규합했다.', true);
+}
+function allianceBreakEvent(){
+  if(G.eventFlags.allianceBroken) return;
+  G.eventFlags.allianceBroken=true;
+  G.alliance.active=false;
+  // 낙양 천도 이벤트: 플레이어가 동탁이 아니고 낙양이 아직 동탁 소유면 낙양 소각·공백지화, 장안 강화
+  const luoyang=G.cities.find(c=>c.name==='낙양');
+  const jangan=G.cities.find(c=>c.name==='장안');
+  let extra='';
+  if(luoyang && luoyang.owner===1 && G.playerFaction!==1){
+    luoyang.owner=-1; luoyang.troops=0; luoyang.pop=Math.floor(luoyang.pop*0.4);
+    luoyang.order=Math.max(10,luoyang.order-30);
+    // 낙양 무장은 장안으로 후퇴
+    G.generals.filter(g=>g.cityId===luoyang.id && g.faction===1).forEach(g=>{ if(jangan) g.cityId=jangan.id; });
+    if(jangan){ jangan.troops+=Math.floor(luoyang.troops*0.5)+3000; }
+    G.eventFlags.luoyangBurned=true;
+    extra='<br><b style="color:#f80">동탁이 낙양을 불태우고 장안으로 천도했습니다. 낙양은 폐허가 되어 공백지가 되었습니다.</b>';
+    log('동탁, 낙양 소각 후 장안 천도! 낙양은 폐허가 되었다.', true);
+  }
+  const body=`<div style="line-height:1.8">191년 — <b style="color:#f99">반동탁 연합이 붕괴</b>했습니다.<br>
+    제후들은 서로의 야심을 드러내며 천하를 두고 다투기 시작합니다.<br>
+    이제 <b>모든 세력이 서로의 적</b>입니다. 군웅할거의 시대입니다.${extra}</div>`;
+  showModal('🔥 연합 붕괴 — 군웅할거', body, [{label:'천하를 향해',cls:'primary',fn:closeModal}]);
+  log('반동탁 연합 붕괴 — 군웅할거 시대 개막.', true);
+  refresh();
+}
+
+/* ---------- 중국 지도 배경 (후한 강역 실루엣 근사) ---------- */
+const CHINA_LAND="M 55,190 L 90,150 L 130,130 L 175,115 L 230,120 L 290,140 L 320,120 L 350,90 L 380,70 L 400,55 L 440,48 L 480,42 L 515,48 L 540,68 L 525,95 L 500,105 L 520,130 L 550,155 L 560,185 L 545,205 L 560,225 L 555,255 L 600,270 L 610,300 L 590,320 L 600,355 L 615,395 L 600,430 L 620,465 L 610,505 L 585,535 L 560,555 L 530,545 L 505,560 L 480,590 L 450,630 L 440,670 L 415,700 L 370,720 L 320,715 L 285,700 L 270,660 L 290,620 L 260,590 L 235,555 L 250,515 L 220,490 L 180,510 L 155,485 L 130,450 L 105,410 L 115,370 L 90,335 L 105,300 L 130,285 L 110,255 L 80,230 L 55,190 Z";
+const HUANGHE="M 95,195 Q 160,215 210,215 Q 250,250 300,250 Q 340,235 385,215 Q 430,225 470,205 Q 510,215 545,235";
+const CHANGJIANG="M 120,415 Q 180,445 250,455 Q 320,470 385,455 Q 440,470 490,445 Q 540,430 585,445"; // 장강
+
+function renderMap(){
+  const svg = document.getElementById('mapsvg');
+  let h = '';
+  // 배경 육지
+  h += `<path d="${CHINA_LAND}" fill="#453c26" stroke="#6a5a38" stroke-width="2.5"/>`;
+  // 강
+  h += `<path d="${HUANGHE}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
+  h += `<path d="${CHANGJIANG}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
+  h += `<text x="150" y="200" font-size="13" fill="#6a9aba" opacity="0.7">黃河</text>`;
+  h += `<text x="175" y="440" font-size="13" fill="#6a9aba" opacity="0.7">長江</text>`;
+  // 바다 라벨
+  h += `<text x="605" y="380" font-size="14" fill="#4a6a8a" opacity="0.6" text-anchor="middle">東海</text>`;
+  h += `<text x="400" y="740" font-size="12" fill="#4a6a8a" opacity="0.5" text-anchor="middle">南海</text>`;
+
+  // links (도로)
+  const drawn = new Set();
+  for(const c of G.cities){
+    for(const l of c.links){
+      if(!G.cities[l]) continue;
+      const key = Math.min(c.id,l)+'-'+Math.max(c.id,l);
+      if(drawn.has(key)) continue; drawn.add(key);
+      const t = G.cities[l];
+      h += `<line x1="${c.x}" y1="${c.y}" x2="${t.x}" y2="${t.y}" stroke="#6a5a38" stroke-width="1.5" opacity="0.7" stroke-dasharray="4 3"/>`;
+    }
+  }
+  // nodes
+  for(const c of G.cities){
+    const empty = c.owner===-1;
+    const f = empty? null : G.factions[c.owner];
+    const col = f ? f.color : '#555';
+    const isPlayer = c.owner===G.playerFaction;
+    const acted = G.actionsLeft[c.id]===false && isPlayer;
+    const big = BIG_CITIES[c.name];
+    const r = big? 15 : 12;
+    const ring = isPlayer? '#ffd700' : (acted?'#555':'#000');
+    h += `<g class="city-node" data-city="${c.id}">
+      ${big? `<rect x="${c.x-r-3}" y="${c.y-r-3}" width="${(r+3)*2}" height="${(r+3)*2}" rx="4" fill="none" stroke="#d4af37" stroke-width="1" opacity="0.5"/>`:''}
+      <circle cx="${c.x}" cy="${c.y}" r="${r}" fill="${col}" stroke="${ring}" stroke-width="${isPlayer?3:1.5}"/>
+      <text class="city-label" x="${c.x}" y="${c.y-r-6}">${c.name}</text>
+      <text class="city-owner" x="${c.x}" y="${c.y+4}" fill="#fff">${empty?'空':(f.name).slice(0,2)}</text>
+    </g>`;
+  }
+  svg.innerHTML = h;
+  svg.querySelectorAll('.city-node').forEach(n=>{
+    n.addEventListener('click',(e)=>{
+      if(VIEW.dragged) return; // 드래그 중이면 선택 무시
+      selectCity(parseInt(n.dataset.city));
+    });
+  });
+  applyViewBox();
+}
+
+/* ---------- 지도 확대/축소 + 팬 ---------- */
+const VIEW = { x:30, y:20, w:620, h:730, baseW:620, baseH:730,
+  minScale:0.5, maxScale:3.0, dragging:false, dragged:false,
+  lastX:0, lastY:0, pinchDist:0 };
+function applyViewBox(){
+  const svg=document.getElementById('mapsvg');
+  if(svg) svg.setAttribute('viewBox', `${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`);
+}
+function currentScale(){ return VIEW.baseW / VIEW.w; }
+function zoomAt(cx, cy, factor){
+  // cx,cy: SVG좌표 기준 확대 중심
+  let ns = currentScale()*factor;
+  ns = Math.max(VIEW.minScale, Math.min(VIEW.maxScale, ns));
+  const nw = VIEW.baseW/ns, nh = VIEW.baseH/ns;
+  // 중심 유지
+  VIEW.x = cx - (cx-VIEW.x)*(nw/VIEW.w);
+  VIEW.y = cy - (cy-VIEW.y)*(nh/VIEW.h);
+  VIEW.w = nw; VIEW.h = nh;
+  clampView(); applyViewBox();
+}
+function clampView(){
+  // 너무 벗어나지 않게(맵 여유 포함)
+  const pad=200;
+  VIEW.x = Math.max(30-pad, Math.min(30+VIEW.baseW+pad-VIEW.w, VIEW.x));
+  VIEW.y = Math.max(20-pad, Math.min(20+VIEW.baseH+pad-VIEW.h, VIEW.y));
+}
+function svgPoint(clientX, clientY){
+  const svg=document.getElementById('mapsvg');
+  const r=svg.getBoundingClientRect();
+  const px=(clientX-r.left)/r.width, py=(clientY-r.top)/r.height;
+  return { x: VIEW.x + px*VIEW.w, y: VIEW.y + py*VIEW.h };
+}
+function resetZoom(){ VIEW.x=30; VIEW.y=20; VIEW.w=VIEW.baseW; VIEW.h=VIEW.baseH; applyViewBox(); }
+
+function initMapControls(){
+  const svg=document.getElementById('mapsvg');
+  if(!svg || svg.dataset.ctrl) return; svg.dataset.ctrl='1';
+  // 마우스 휠 줌
+  svg.addEventListener('wheel',(e)=>{
+    e.preventDefault();
+    const p=svgPoint(e.clientX,e.clientY);
+    zoomAt(p.x,p.y, e.deltaY<0?1.15:0.87);
+  },{passive:false});
+  // 포인터 팬
+  let pointers=new Map();
+  svg.addEventListener('pointerdown',(e)=>{
+    svg.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    VIEW.dragging=true; VIEW.dragged=false;
+    VIEW.lastX=e.clientX; VIEW.lastY=e.clientY;
+    if(pointers.size===2){
+      const pts=[...pointers.values()];
+      VIEW.pinchDist=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    }
+  });
+  svg.addEventListener('pointermove',(e)=>{
+    if(!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size===2){
+      // 핀치 줌
+      const pts=[...pointers.values()];
+      const d=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      if(VIEW.pinchDist>0){
+        const mid=svgPoint((pts[0].x+pts[1].x)/2,(pts[0].y+pts[1].y)/2);
+        zoomAt(mid.x,mid.y, d/VIEW.pinchDist);
+      }
+      VIEW.pinchDist=d; VIEW.dragged=true;
+    } else if(VIEW.dragging){
+      const dx=e.clientX-VIEW.lastX, dy=e.clientY-VIEW.lastY;
+      if(Math.abs(dx)+Math.abs(dy)>3) VIEW.dragged=true;
+      const svgEl=document.getElementById('mapsvg');
+      const r=svgEl.getBoundingClientRect();
+      VIEW.x -= dx*(VIEW.w/r.width);
+      VIEW.y -= dy*(VIEW.h/r.height);
+      VIEW.lastX=e.clientX; VIEW.lastY=e.clientY;
+      clampView(); applyViewBox();
+    }
+  });
+  const up=(e)=>{
+    pointers.delete(e.pointerId);
+    if(pointers.size<2) VIEW.pinchDist=0;
+    if(pointers.size===0){ VIEW.dragging=false; setTimeout(()=>{VIEW.dragged=false;},50); }
+  };
+  svg.addEventListener('pointerup',up);
+  svg.addEventListener('pointercancel',up);
+  // 줌 버튼
+  const zc=document.getElementById('zoomctrl');
+  if(zc){
+    zc.querySelector('.zin').onclick=()=>{ const c=svgPoint(0,0); zoomAt(VIEW.x+VIEW.w/2,VIEW.y+VIEW.h/2,1.3); };
+    zc.querySelector('.zout').onclick=()=>{ zoomAt(VIEW.x+VIEW.w/2,VIEW.y+VIEW.h/2,0.77); };
+    zc.querySelector('.zreset').onclick=resetZoom;
+  }
+}
+
+/* ---------- 상단바 ---------- */
+function renderTop(){
+  document.getElementById('date').textContent = `${G.year}년 ${G.month}월`;
+  // 연합 배지 (별도 span)
+  const badge=document.getElementById('allianceBadge');
+  if(badge){
+    const on=(G.alliance && G.alliance.active && G.playerFaction!==G.alliance.target);
+    badge.innerHTML = on ? `<span class="alliance-badge">反董卓聯合</span>` : '';
+  }
+  const pf = G.factions[G.playerFaction];
+  const myCities = G.cities.filter(c=>c.owner===G.playerFaction);
+  const gold = myCities.reduce((s,c)=>s+c.gold,0);
+  const food = myCities.reduce((s,c)=>s+c.food,0);
+  const troops = myCities.reduce((s,c)=>s+c.troops,0);
+  // 압축 표기 (아이콘 라벨, nowrap)
+  document.getElementById('res').innerHTML =
+    `<b style="color:${pf?pf.color:'#fff'};flex-shrink:0">${pf?pf.name:''}</b>`+
+    `<span class="rlbl">금</span><span>${gold}</span>`+
+    `<span class="rlbl">군량</span><span>${food}</span>`+
+    `<span class="rlbl">병</span><span>${(troops/1000).toFixed(1)}천</span>`+
+    `<span class="rlbl">성</span><span>${myCities.length}</span>`;
+}
+
+/* ---------- 도시 선택 & 하단 패널 ---------- */
+let genExpanded=false;
+function selectCity(id){
+  G.selectedCity = id;
+  const c = G.cities[id];
+  const empty = c.owner===-1;
+  const f = empty? null : G.factions[c.owner];
+  const gens = empty? [] : G.generals.filter(g=>g.cityId===id && g.faction===c.owner);
+  const isPlayer = c.owner===G.playerFaction;
+  const acted = G.actionsLeft[id]===false;
+
+  const bottom = document.getElementById('bottom');
+  bottom.classList.remove('hidden');
+
+  // 무장 리스트 (병과 적성 + 성격)
+  let genHtml = gens.length? gens.map(g=>{
+    const best=bestAptType(g);
+    const aptCell=(k,label)=>{
+      const gr=aptGrade(g,k), lbl=APT_LABEL[gr];
+      const hi = gr>=3; const isBest = k===best;
+      return `<span class="apt-cell ${hi?'apt-hi':''} ${isBest?'apt-best':''}">${label}${lbl}</span>`;
+    };
+    return `<div class="gen-row">
+      <span class="gname" onclick="showGenInfo(${g.id})" style="cursor:pointer">${g.name}<span class="pbadge" style="background:${personaColor(g)}">${personaLabel(g)}</span></span>
+      <span class="apt-group">${aptCell('cav','🐎')}${aptCell('inf','🛡️')}${aptCell('arc','🏹')}</span>
+      <span class="gstat">무${g.war}·통${g.lead}·지${g.int}</span></div>`;
+  }).join('') : '<div class="gen-row" style="color:#888">주둔 무장 없음</div>';
+
+  // 커맨드 (상단 고정)
+  let cmds = '';
+  if(isPlayer){
+    const dis = acted ? 'disabled' : '';
+    cmds = `<div class="cmd-grid">
+      <div class="cmd-btn ${dis}" onclick="cmdDevelop('agri')">🌾개발·농업</div>
+      <div class="cmd-btn ${dis}" onclick="cmdDevelop('comm')">💰개발·상업</div>
+      <div class="cmd-btn ${dis}" onclick="cmdOrder()">🛡️치안</div>
+      <div class="cmd-btn ${dis}" onclick="cmdConscript()">⚔️징병</div>
+      <div class="cmd-btn ${dis}" onclick="cmdTrain()">🏋️훈련</div>
+      <div class="cmd-btn" onclick="cmdAttack()">🔥출병·공격</div>
+    </div>${acted?'<div class="acted-note">이번 달 내정 명령을 사용했습니다 (출병은 가능)</div>':''}`;
+  }
+
+  bottom.innerHTML = `
+    <div class="panel-head">
+      <span class="cname">${c.name}</span>
+      <span style="color:${f?f.color:'#999'};font-size:14px;font-weight:bold">${f?f.name:'공백지'}</span>
+      <button class="cclose" onclick="closeBottom()">✕</button>
+    </div>
+    <div class="panel-body">
+      ${cmds}
+      <div class="stat-mini">
+        <span>병력 <b>${c.troops.toLocaleString()}</b></span>
+        <span>훈련 <b>${c.train}</b></span>
+        <span>치안 <b>${c.order}</b></span>
+        <span>금 <b>${c.gold}</b></span>
+        <span>군량 <b>${c.food}</b></span>
+      </div>
+      <div class="gen-header" onclick="toggleGens()">
+        <span>무장 ${gens.length}명 · 인구 ${c.pop.toLocaleString()} · 농${c.agri}/상${c.comm}</span>
+        <span class="gen-toggle">${genExpanded?'▲ 접기':'▼ 상세'}</span>
+      </div>
+      <div class="generals ${genExpanded?'':'collapsed'}">${genHtml}</div>
+    </div>`;
+}
+function toggleGens(){ genExpanded=!genExpanded; if(G.selectedCity!=null) selectCity(G.selectedCity); }
+function closeBottom(){ document.getElementById('bottom').classList.add('hidden'); G.selectedCity=null; }
+
+/* ---------- 병과 시스템 ---------- */
+// 무장 능력치 기반 주병과 결정 (저장된 값 우선)
+const TROOP_TYPES = {
+  cav:  { key:'cav',  name:'기병', icon:'🐎', move:3, atkMul:1.15, def:0.9,  range:1 },
+  inf:  { key:'inf',  name:'보병', icon:'🛡️', move:2, atkMul:1.0,  def:1.15, range:1 },
+  arc:  { key:'arc',  name:'궁병', icon:'🏹', move:2, atkMul:0.9,  def:0.85, range:2 },
+};
+// 상성: 기병>보병>궁병>기병 (공격 시 1.3배)
+function counterBonus(atkKey, defKey){
+  if(atkKey==='cav'&&defKey==='inf') return 1.3;
+  if(atkKey==='inf'&&defKey==='arc') return 1.3;
+  if(atkKey==='arc'&&defKey==='cav') return 1.3;
+  // 역상성은 불리
+  if(defKey==='cav'&&atkKey==='inf') return 0.8;
+  if(defKey==='inf'&&atkKey==='arc') return 0.8;
+  if(defKey==='arc'&&atkKey==='cav') return 0.8;
+  return 1.0;
+}
+// 적성 등급 표기 & 전투 보정
+const APT_LABEL={4:'S',3:'A',2:'B',1:'C'};
+const APT_MUL ={4:1.25, 3:1.12, 2:1.0, 1:0.82}; // 적성별 공/방 배율
+function aptGrade(gen, ttKey){ return (gen&&gen.apt&&gen.apt[ttKey])||2; }
+function aptLabel(gen, ttKey){ return APT_LABEL[aptGrade(gen,ttKey)]; }
+function aptMul(gen, ttKey){ return APT_MUL[aptGrade(gen,ttKey)]; }
+// 무장의 최고 적성 병과
+function bestAptType(gen){
+  if(!gen||!gen.apt) return 'inf';
+  const a=gen.apt; let best='inf', bv=-1;
+  for(const k of ['cav','inf','arc']){ if(a[k]>bv){ bv=a[k]; best=k; } }
+  return best;
+}
+function troopType(gen){
+  if(gen && gen.ttype && TROOP_TYPES[gen.ttype]) return TROOP_TYPES[gen.ttype];
+  // 적성 최고 병과를 기본 병과로
+  if(gen && gen.apt) return TROOP_TYPES[bestAptType(gen)];
+  return TROOP_TYPES.inf;
+}
+
+/* ---------- 성격 · 대사 · 상성 ---------- */
+function personaOf(gen){ return (gen && gen.persona) || 'plain'; }
+function personaLabel(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.label:'평범'; }
+function personaColor(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.color:'#a09070'; }
+function personaTrait(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.trait:''; }
+// 상황별 대사 한 줄
+function genLine(gen, situation){
+  if(!gen || !gen.name) return '';
+  const p=PERSONA[gen.name];
+  const set = (p && p.lines && p.lines[situation]) || (LINES_FALLBACK[situation]||['']);
+  return set[Math.floor(Math.random()*set.length)];
+}
+const LINES_FALLBACK={battle:['간다!'],win:['이겼다!'],lose:['졌는가…'],duel:['겨뤄보자!']};
+// 두 무장 사이 관계 조회
+function relationBetween(nameA, nameB){
+  if(!nameA||!nameB) return null;
+  for(const r of RELATIONS){
+    if((r.a===nameA&&r.b===nameB)||(r.a===nameB&&r.b===nameA)) return r;
+  }
+  return null;
+}
+// 부대 편성 내 우호 관계 사기 보너스 (같은 편 무장끼리)
+function allyMoraleBonus(units, side){
+  const mates=units.filter(u=>u.side===side && u.gen).map(u=>u.gen.name);
+  let bonus=0, pairs=[];
+  for(let i=0;i<mates.length;i++)for(let j=i+1;j<mates.length;j++){
+    const r=relationBetween(mates[i],mates[j]);
+    if(r && r.bond>0){ bonus += r.bond; pairs.push({a:mates[i],b:mates[j],type:r.type,bond:r.bond}); }
+  }
+  return { bonus, pairs };
+}
+// 냉철 성격은 상성/사기 영향 완화
+function personaMoraleFactor(gen){ return personaOf(gen)==='cold' ? 0.5 : 1.0; }
+
+// 무장 상세 정보 모달
+function showGenInfo(genId){
+  const g=G.generals.find(x=>x.id===genId); if(!g) return;
+  const arch=ARCHETYPES[personaOf(g)];
+  const best=bestAptType(g);
+  const aptRow=['cav','inf','arc'].map(k=>{
+    const icon={cav:'🐎기병',inf:'🛡️보병',arc:'🏹궁병'}[k];
+    return `${icon} ${APT_LABEL[aptGrade(g,k)]}${k===best?'★':''}`;
+  }).join(' · ');
+  // 상성 목록
+  const rels=RELATIONS.filter(r=>r.a===g.name||r.b===g.name).map(r=>{
+    const other = r.a===g.name? r.b : r.a;
+    const exists = G.generals.some(x=>x.name===other); // 현 시나리오에 존재하는지
+    const color = r.bond>0?'#8fd':'#f88';
+    return `<span style="color:${color}">${other}</span> <span style="color:#999;font-size:11px">(${REL_LABEL[r.type]})</span>${exists?'':' <span style="color:#666;font-size:10px">부재</span>'}`;
+  });
+  const cry=genLine(g,'battle');
+  const cityName = g.cityId>=0 && G.cities[g.cityId] ? G.cities[g.cityId].name : '재야';
+  const body=`<div style="line-height:1.7">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <b style="font-size:20px;color:var(--gold)">${g.name}</b>
+      <span class="pbadge" style="background:${arch.color}">${arch.label}</span>
+      <span style="color:#999;font-size:12px;margin-left:auto">${cityName}</span>
+    </div>
+    <div style="color:#dca;font-style:italic;margin-bottom:8px">"${cry}"</div>
+    <div style="background:var(--panel2);border-radius:6px;padding:8px;margin-bottom:8px">
+      <div style="color:#b8a878;font-size:13px">무력 <b style="color:var(--gold)">${g.war}</b> · 통솔 <b style="color:var(--gold)">${g.lead}</b> · 지력 <b style="color:var(--gold)">${g.int}</b> · 정치 <b style="color:var(--gold)">${g.pol}</b></div>
+      <div style="color:#b8a878;font-size:13px;margin-top:4px">병과: ${aptRow}</div>
+    </div>
+    <div style="font-size:13px;color:#b8a878;margin-bottom:6px">🎭 <b>${arch.label}</b> — ${arch.trait}</div>
+    ${rels.length? `<div style="font-size:13px;color:#b8a878">🤝 관계: ${rels.join(', ')}</div>` : '<div style="font-size:12px;color:#666">알려진 상성 없음</div>'}
+  </div>`;
+  showModal('무장 정보', body, [{label:'닫기',cls:'primary',fn:closeModal}]);
+}
+
+/* ---------- 내정 커맨드 (삼국지 2식) ---------- */
+function useAction(id){ G.actionsLeft[id]=false; }
+function bestPol(id){ const gs=G.generals.filter(g=>g.cityId===id); return gs.length?Math.max(...gs.map(g=>g.pol)):40; }
+function bestInt(id){ const gs=G.generals.filter(g=>g.cityId===id); return gs.length?Math.max(...gs.map(g=>g.int)):40; }
+
+function cmdDevelop(type){
+  const c=G.cities[G.selectedCity]; if(c.gold<100){toast('금이 부족합니다');return;}
+  const eff = 20 + Math.floor(bestPol(c.id)*0.3);
+  c.gold-=100;
+  if(type==='agri'){ c.agri+=eff; log(`${c.name} 농업 개발 (+${eff})`); }
+  else { c.comm+=eff; log(`${c.name} 상업 개발 (+${eff})`); }
+  useAction(c.id); refresh();
+}
+function cmdOrder(){
+  const c=G.cities[G.selectedCity]; if(c.gold<50){toast('금이 부족합니다');return;}
+  const eff=8+Math.floor(bestPol(c.id)*0.1); c.gold-=50; c.order=Math.min(100,c.order+eff);
+  log(`${c.name} 치안 회복 (+${eff})`); useAction(c.id); refresh();
+}
+function cmdConscript(){
+  const c=G.cities[G.selectedCity];
+  const max=Math.floor(c.pop*0.05);
+  if(c.gold<200){toast('금이 부족합니다');return;}
+  const n=Math.min(max,2000); c.gold-=200; c.pop-=n; c.troops+=n; c.order=Math.max(0,c.order-8);
+  log(`${c.name} 징병 (+${n}, 치안 -8)`); useAction(c.id); refresh();
+}
+function cmdTrain(){
+  const c=G.cities[G.selectedCity]; if(c.gold<80){toast('금이 부족합니다');return;}
+  const gs=G.generals.filter(g=>g.cityId===c.id);
+  const lead=gs.length?Math.max(...gs.map(g=>g.lead)):40;
+  const eff=8+Math.floor(lead*0.15); c.gold-=80; c.train=Math.min(100,c.train+eff);
+  log(`${c.name} 훈련 (+${eff})`); useAction(c.id); refresh();
+}
+
+/* ---------- 공격 → 헥스 전투 진입 ---------- */
+function cmdAttack(){
+  const c=G.cities[G.selectedCity];
+  let targets=c.links.map(l=>G.cities[l]).filter(t=>t.owner!==G.playerFaction);
+  if(!targets.length){toast('공격할 인접 도시가 없습니다');return;}
+  const myGens=G.generals.filter(g=>g.cityId===c.id && g.faction===G.playerFaction);
+  if(!myGens.length){toast('출병할 무장이 없습니다');return;}
+  if(c.troops<500){toast('출병할 병력이 부족합니다');return;}
+  // 연합 중: 플레이어(동탁 아님)는 동탁·공백지만 공격 가능
+  const allianceOn = G.alliance && G.alliance.active && G.playerFaction!==G.alliance.target;
+  let body=`<p style="margin-bottom:10px;color:#b8a878">출병할 대상을 선택하세요.</p>`;
+  if(allianceOn){
+    body+=`<div style="font-size:12px;color:#8fa;margin-bottom:8px;padding:6px;background:#1a2a1a;border-radius:5px">연합 기간 중 — 동탁과 공백지만 공격할 수 있습니다.</div>`;
+  }
+  let anyValid=false;
+  targets.forEach(t=>{
+    const blocked = allianceOn && t.owner!==-1 && t.owner!==G.alliance.target;
+    const label = t.owner===-1
+      ? `<span style="color:#7a9">공백지 · 정규군 없음</span>`
+      : `<span style="color:#b8a878">병력 ${(t.troops/1000).toFixed(1)}천 · ${G.factions[t.owner].name}</span>`;
+    if(blocked){
+      body+=`<div class="listitem" style="opacity:.4;pointer-events:none">
+        <b style="color:#888">${t.name}</b>
+        <span style="margin-left:auto;color:#888">연합 동맹 (공격 불가)</span></div>`;
+    } else {
+      anyValid=true;
+      body+=`<div class="listitem" onclick="openFormation(${c.id},${t.id})">
+        <b style="color:#d4af37">${t.name}</b>
+        <span style="margin-left:auto">${label}</span></div>`;
+    }
+  });
+  if(!anyValid && allianceOn){ body+=`<div style="color:#c88;text-align:center;margin-top:8px;font-size:13px">인접에 공격 가능한 대상이 없습니다.</div>`; }
+  showModal('출병 대상', body, [{label:'취소',cls:'',fn:closeModal}]);
+}
+
+/* ---------- 출병 편성 UI ---------- */
+const FORM = { atkCity:null, defCity:null, picks:[] }; // picks: [{genId, ttype, troops}]
+function openFormation(atkId, defId){
+  const atk=G.cities[atkId], def=G.cities[defId];
+  // 공백지 무혈입성 처리
+  if(def.owner===-1 && def.troops<=0){
+    showModal('무혈입성',
+      `<div style="line-height:1.7">${def.name}은(는) 정규군이 없는 공백지입니다.<br>
+       병력을 보내 <b style="color:#d4af37">무혈입성</b>하시겠습니까?<br>
+       <span style="font-size:12px;color:#999">파견 병력 일부가 주둔군으로 남습니다.</span></div>`,
+      [{label:'취소',cls:'',fn:()=>{closeModal(); cmdAttack();}},
+       {label:'입성',cls:'primary',fn:()=>{ closeModal(); bloodlessCapture(atkId,defId); }}]);
+    return;
+  }
+  FORM.atkCity=atkId; FORM.defCity=defId;
+  const gens=G.generals.filter(g=>g.cityId===atkId && g.faction===G.playerFaction);
+  // 최대 3부대. 기본 상위 3명 선택, 병력 균등 배분
+  const top=gens.slice(0,3);
+  const per=Math.floor(atk.troops/Math.max(1,top.length)/100)*100;
+  FORM.picks=gens.map((g,i)=>({
+    genId:g.id, sel: i<3, ttype: troopType(g).key, troops: i<3?per:0
+  }));
+  renderFormation();
+}
+function renderFormation(){
+  const atk=G.cities[FORM.atkCity], def=G.cities[FORM.defCity];
+  const gens=G.generals.filter(g=>g.cityId===FORM.atkCity && g.faction===G.playerFaction);
+  const selCount=FORM.picks.filter(p=>p.sel).length;
+  const used=FORM.picks.filter(p=>p.sel).reduce((s,p)=>s+p.troops,0);
+  const remain=atk.troops-used;
+  let body=`<div class="form-info">
+    <span>총 병력 <b>${atk.troops.toLocaleString()}</b></span>
+    <span>배정 <b style="color:${remain<0?'#f66':'#8fd'}">${used.toLocaleString()}</b></span>
+    <span>잔여 <b style="color:${remain<0?'#f66':'#d4af37'}">${remain.toLocaleString()}</b></span>
+  </div>
+  <div style="font-size:12px;color:#999;margin-bottom:8px">부대 선택(최대 3) · 병과 · 병력을 정하세요. 병과: 🐎기병 🛡️보병 🏹궁병</div>`;
+  gens.forEach(g=>{
+    const p=FORM.picks.find(x=>x.genId===g.id);
+    const disabled = !p.sel && selCount>=3;
+    const ttBtn=(k,icon)=>{
+      const gr=APT_LABEL[aptGrade(g,k)];
+      const hi=aptGrade(g,k)>=3;
+      return `<span class="ttpick ${p.ttype===k?'sel':''}" onclick="setTT(${g.id},'${k}')">${icon}<b class="ttgrade ${hi?'g-hi':''}">${gr}</b></span>`;
+    };
+    body+=`<div class="form-row ${p.sel?'on':''} ${disabled?'dis':''}">
+      <div class="fr-check" onclick="togglePick(${g.id})">${p.sel?'✔':'　'}</div>
+      <div class="fr-name">${g.name}<br><span class="fr-stat">무${g.war}·통${g.lead}</span></div>
+      <div class="fr-tt">${ttBtn('cav','🐎')}${ttBtn('inf','🛡️')}${ttBtn('arc','🏹')}</div>
+      <div class="fr-troops">
+        <button onclick="chgTroops(${g.id},-500)">－</button>
+        <span>${p.troops.toLocaleString()}</span>
+        <button onclick="chgTroops(${g.id},500)">＋</button>
+      </div>
+    </div>`;
+  });
+  const valid = selCount>=1 && used>0 && remain>=0;
+  showModal(`출병 편성 — ${atk.name} → ${def.name}`, body,
+    [{label:'취소',cls:'',fn:()=>{closeModal();}},
+     {label: valid?'출병!':'병력 확인', cls: valid?'primary':'', fn: valid?launchFromFormation:()=>toast('배정 병력이 총 병력을 초과했거나 0입니다')}]);
+}
+function togglePick(genId){
+  const p=FORM.picks.find(x=>x.genId===genId);
+  const selCount=FORM.picks.filter(x=>x.sel).length;
+  if(!p.sel && selCount>=3){ toast('최대 3부대까지'); return; }
+  p.sel=!p.sel;
+  if(p.sel && p.troops===0){ p.troops=1000; }
+  if(!p.sel) p.troops=0;
+  renderFormation();
+}
+function setTT(genId, tt){ const p=FORM.picks.find(x=>x.genId===genId); if(p.sel){ p.ttype=tt; renderFormation(); } }
+function chgTroops(genId, delta){
+  const p=FORM.picks.find(x=>x.genId===genId); if(!p.sel) return;
+  const atk=G.cities[FORM.atkCity];
+  p.troops=Math.max(0, Math.min(atk.troops, p.troops+delta));
+  renderFormation();
+}
+function launchFromFormation(){
+  closeModal();
+  const picks=FORM.picks.filter(p=>p.sel && p.troops>0);
+  startBattle(FORM.atkCity, FORM.defCity, picks);
+}
+
+/* ---------- 수비 편성 UI (플레이어 방어) ---------- */
+const DFORM = { atkCity:null, defCity:null, picks:[] };
+function openDefenseFormation(atkId, defId){
+  const atk=G.cities[atkId], def=G.cities[defId];
+  const defGens=G.generals.filter(g=>g.cityId===defId && g.faction===G.playerFaction);
+  // 무장 없거나 병력 없으면 자동 처리
+  if(!defGens.length || def.troops<300){
+    autoResolveBattle(atk, def, atk.owner);
+    refresh();
+    showModal('적의 침공', `${G.factions[atk.owner].name}이(가) <b>${def.name}</b>을(를) 공격했습니다.` +
+      (def.owner!==G.playerFaction? `<br><span style="color:#f66">${def.name}을(를) 빼앗겼습니다!</span>` : `<br>수비에 성공했습니다.`),
+      [{label:'확인',cls:'primary',fn:()=>{closeModal(); refresh(); checkGameEnd();}}]);
+    return;
+  }
+  DFORM.atkCity=atkId; DFORM.defCity=defId;
+  const per=Math.floor(def.troops/Math.min(3,defGens.length)/100)*100;
+  DFORM.picks=defGens.map((g,i)=>({ genId:g.id, sel:i<3, ttype:troopType(g).key, troops:i<3?per:0 }));
+  renderDefenseFormation();
+}
+function renderDefenseFormation(){
+  const atk=G.cities[DFORM.atkCity], def=G.cities[DFORM.defCity];
+  const gens=G.generals.filter(g=>g.cityId===DFORM.defCity && g.faction===G.playerFaction);
+  const selCount=DFORM.picks.filter(p=>p.sel).length;
+  const used=DFORM.picks.filter(p=>p.sel).reduce((s,p)=>s+p.troops,0);
+  const remain=def.troops-used;
+  const atkInfo=`${G.factions[atk.owner].name} · 병력 ${(atk.troops/1000).toFixed(1)}천`;
+  let body=`<div style="background:#3a1c1c;border:1px solid #a55;border-radius:6px;padding:8px;margin-bottom:8px;font-size:13px">
+    ⚠️ <b style="color:#f99">${atkInfo}</b>이(가) <b>${def.name}</b>을(를) 공격합니다!</div>
+    <div class="form-info">
+      <span>수비 병력 <b>${def.troops.toLocaleString()}</b></span>
+      <span>배정 <b style="color:${remain<0?'#f66':'#8fd'}">${used.toLocaleString()}</b></span>
+      <span>잔여 <b style="color:${remain<0?'#f66':'#d4af37'}">${remain.toLocaleString()}</b></span>
+    </div>
+    <div style="font-size:12px;color:#999;margin-bottom:8px">수비 부대 편성(최대 3) · 병과별 적성(S/A/B/C)을 확인하세요.</div>`;
+  gens.forEach(g=>{
+    const p=DFORM.picks.find(x=>x.genId===g.id);
+    const disabled = !p.sel && selCount>=3;
+    const ttBtn=(k,icon)=>{
+      const gr=APT_LABEL[aptGrade(g,k)]; const hi=aptGrade(g,k)>=3;
+      return `<span class="ttpick ${p.ttype===k?'sel':''}" onclick="setDTT(${g.id},'${k}')">${icon}<b class="ttgrade ${hi?'g-hi':''}">${gr}</b></span>`;
+    };
+    body+=`<div class="form-row ${p.sel?'on':''} ${disabled?'dis':''}">
+      <div class="fr-check" onclick="toggleDPick(${g.id})">${p.sel?'✔':'　'}</div>
+      <div class="fr-name">${g.name}<br><span class="fr-stat">무${g.war}·통${g.lead}</span></div>
+      <div class="fr-tt">${ttBtn('cav','🐎')}${ttBtn('inf','🛡️')}${ttBtn('arc','🏹')}</div>
+      <div class="fr-troops">
+        <button onclick="chgDTroops(${g.id},-500)">－</button>
+        <span>${p.troops.toLocaleString()}</span>
+        <button onclick="chgDTroops(${g.id},500)">＋</button>
+      </div>
+    </div>`;
+  });
+  const valid = selCount>=1 && used>0 && remain>=0;
+  showModal(`🛡️ 수비 편성 — ${def.name} 방어전`, body,
+    [{label:'자동 방어',cls:'',fn:()=>{ closeModal(); autoDefend(); }},
+     {label: valid?'수비 개시!':'병력 확인', cls: valid?'primary':'',
+      fn: valid?launchDefense:()=>toast('배정 병력 확인')}]);
+}
+function toggleDPick(id){ const p=DFORM.picks.find(x=>x.genId===id); const n=DFORM.picks.filter(x=>x.sel).length;
+  if(!p.sel && n>=3){toast('최대 3부대');return;} p.sel=!p.sel; if(p.sel&&p.troops===0)p.troops=1000; if(!p.sel)p.troops=0; renderDefenseFormation(); }
+function setDTT(id,tt){ const p=DFORM.picks.find(x=>x.genId===id); if(p.sel){p.ttype=tt; renderDefenseFormation();} }
+function chgDTroops(id,d){ const p=DFORM.picks.find(x=>x.genId===id); if(!p.sel)return; const def=G.cities[DFORM.defCity];
+  p.troops=Math.max(0,Math.min(def.troops,p.troops+d)); renderDefenseFormation(); }
+function autoDefend(){
+  const atk=G.cities[DFORM.atkCity], def=G.cities[DFORM.defCity];
+  autoResolveBattle(atk,def,atk.owner); refresh();
+  const lost=def.owner!==G.playerFaction;
+  showModal(lost?'패배':'방어 성공', lost?`${def.name}을(를) 빼앗겼습니다.`:`${def.name} 수비에 성공했습니다.`,
+    [{label:'확인',cls:'primary',fn:()=>{closeModal(); refresh(); checkGameEnd();}}]);
+}
+function launchDefense(){
+  closeModal();
+  const picks=DFORM.picks.filter(p=>p.sel && p.troops>0);
+  startBattle(DFORM.atkCity, DFORM.defCity, null, picks); // 4번째 인자=수비 편성
+}
+
+function bloodlessCapture(atkId, defId){
+  const atk=G.cities[atkId], def=G.cities[defId];
+  const send=Math.min(atk.troops, Math.max(1000, Math.floor(atk.troops*0.4)));
+  atk.troops-=send; def.owner=G.playerFaction; def.troops=send; def.train=atk.train;
+  const g=G.generals.find(g=>g.cityId===atk.id && g.faction===G.playerFaction);
+  if(g) g.cityId=def.id;
+  log(`${def.name} 무혈입성! (주둔 ${send})`, true);
+  toast(`${def.name} 점령`);
+  useAction(atk.id); refresh();
+}
+
+/* ---------- 모달 ---------- */
+function showModal(title, body, buttons){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=body;
+  const foot=document.getElementById('modal-foot'); foot.innerHTML='';
+  (buttons||[]).forEach(b=>{
+    const btn=document.createElement('button'); btn.className='btn '+(b.cls||''); btn.textContent=b.label;
+    btn.onclick=b.fn; foot.appendChild(btn);
+  });
+  document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
+
+/* ============================================================
+   효과음(WebAudio) · 햅틱 · 시각 이펙트 엔진
+   ============================================================ */
+const FX = { audioCtx:null, enabled:true };
+function ensureAudio(){
+  if(!FX.audioCtx){
+    try{ FX.audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ FX.enabled=false; }
+  }
+  if(FX.audioCtx && FX.audioCtx.state==='suspended') FX.audioCtx.resume();
+  return FX.audioCtx;
+}
+// 간단 합성음: 타입별 파형/주파수/길이
+function sfx(type){
+  if(!FX.enabled) return;
+  const ctx=ensureAudio(); if(!ctx) return;
+  const now=ctx.currentTime;
+  const mk=(freq,dur,wave,gain,slideTo)=>{
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=wave||'square'; o.frequency.setValueAtTime(freq,now);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, now+dur);
+    g.gain.setValueAtTime(0.0001,now);
+    g.gain.exponentialRampToValueAtTime(gain||0.15, now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+    o.connect(g); g.connect(ctx.destination); o.start(now); o.stop(now+dur);
+  };
+  const noise=(dur,gain)=>{
+    const n=Math.floor(ctx.sampleRate*dur), buf=ctx.createBuffer(1,n,ctx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const g=ctx.createGain(); g.gain.value=gain||0.2;
+    src.connect(g); g.connect(ctx.destination); src.start(now);
+  };
+  switch(type){
+    case 'select': mk(520,0.08,'square',0.08); break;
+    case 'move':   mk(320,0.10,'triangle',0.08,420); break;
+    case 'hit':    noise(0.18,0.25); mk(140,0.16,'sawtooth',0.12,80); break; // 타격
+    case 'crit':   noise(0.28,0.32); mk(90,0.3,'sawtooth',0.16,60); break;   // 강타
+    case 'arrow':  mk(900,0.12,'triangle',0.10,300); break;                  // 화살
+    case 'duel':   mk(660,0.1,'square',0.12); setTimeout(()=>mk(880,0.12,'square',0.12),100); setTimeout(()=>mk(1100,0.15,'square',0.13),220); break;
+    case 'win':    [523,659,784,1047].forEach((f,i)=>setTimeout(()=>mk(f,0.22,'triangle',0.14),i*120)); break;
+    case 'lose':   [400,330,262,196].forEach((f,i)=>setTimeout(()=>mk(f,0.28,'sawtooth',0.13),i*140)); break;
+    case 'start':  mk(300,0.15,'sawtooth',0.12,500); setTimeout(()=>noise(0.3,0.15),120); break;
+    case 'destroy':noise(0.4,0.35); mk(70,0.4,'sawtooth',0.18,40); break;
+  }
+}
+function haptic(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms); }catch(e){} } }
+function hapticPattern(arr){ if(navigator.vibrate){ try{ navigator.vibrate(arr); }catch(e){} } }
+function toggleFX(){ FX.enabled=!FX.enabled; const b=document.getElementById('fxToggle');
+  if(b){ b.textContent=FX.enabled?'🔊':'🔇'; b.classList.toggle('off',!FX.enabled); }
+  if(!FX.enabled){ stopBgm(); } else { sfx('select'); startBgm(BGM.mode||'field'); } }
+
+/* ---------- 배경음악 (절차적 생성, 삼국지풍) ---------- */
+const BGM = { timer:null, mode:null, nodes:[], nextTime:0, step:0, master:null };
+// 오리엔탈 5음계 (C 궁상각치우 + 옥타브)
+const PENTA = [261.63,293.66,329.63,392.00,440.00, 523.25,587.33,659.25,784.00,880.00];
+const PENTA_LOW = [130.81,146.83,164.81,196.00,220.00];
+function noteFreq(scale, i){ return scale[((i%scale.length)+scale.length)%scale.length]; }
+function bgmTone(freq,start,dur,gain,wave){
+  const ctx=FX.audioCtx; if(!ctx) return;
+  const o=ctx.createOscillator(), g=ctx.createGain();
+  o.type=wave||'triangle'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,start);
+  g.gain.exponentialRampToValueAtTime(gain,start+0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+  o.connect(g); g.connect(BGM.master||ctx.destination); o.start(start); o.stop(start+dur+0.05);
+  BGM.nodes.push(o);
+}
+function bgmDrum(start,gain){
+  const ctx=FX.audioCtx; if(!ctx) return;
+  const n=Math.floor(ctx.sampleRate*0.12), buf=ctx.createBuffer(1,n,ctx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
+  const src=ctx.createBufferSource(); src.buffer=buf;
+  const g=ctx.createGain(); g.gain.value=gain||0.15;
+  const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=200;
+  src.connect(f); f.connect(g); g.connect(BGM.master||ctx.destination); src.start(start);
+}
+// 멜로디 패턴 (모드별)
+const BGM_PATTERNS = {
+  field: { // 평시: 차분, 느림
+    tempo:0.42, mel:[0,2,4,2,3,4,2,0, 4,3,2,0,2,-1,0,2], bassEach:4, drumEach:0, wave:'triangle', melGain:0.08, bassGain:0.09
+  },
+  battle: { // 전투: 빠르고 웅장, 북소리
+    tempo:0.26, mel:[0,2,4,7,4,2,0,4, 7,9,7,4,2,4,0,-3, 4,7,9,7,4,2,0,2], bassEach:2, drumEach:2, wave:'sawtooth', melGain:0.09, bassGain:0.11
+  },
+};
+function startBgm(mode){
+  if(!FX.enabled) { BGM.mode=mode; return; }
+  const ctx=ensureAudio(); if(!ctx) return;
+  if(BGM.mode===mode && BGM.timer) return; // 이미 재생 중
+  stopBgm();
+  BGM.mode=mode; BGM.step=0;
+  if(!BGM.master){ BGM.master=ctx.createGain(); BGM.master.gain.value=0.6; BGM.master.connect(ctx.destination); }
+  const pat=BGM_PATTERNS[mode]||BGM_PATTERNS.field;
+  BGM.nextTime=ctx.currentTime+0.1;
+  const schedule=()=>{
+    if(!BGM.timer) return;
+    const now=ctx.currentTime;
+    while(BGM.nextTime < now+0.5){
+      const s=BGM.step, t=BGM.nextTime, pat2=BGM_PATTERNS[BGM.mode]||BGM_PATTERNS.field;
+      const mi=pat2.mel[s%pat2.mel.length];
+      if(mi>-10) bgmTone(noteFreq(PENTA,mi), t, pat2.tempo*0.9, pat2.melGain, pat2.wave);
+      if(pat2.bassEach && s%pat2.bassEach===0) bgmTone(noteFreq(PENTA_LOW,mi), t, pat2.tempo*1.6, pat2.bassGain, 'triangle');
+      if(pat2.drumEach && s%pat2.drumEach===0) bgmDrum(t, 0.16);
+      BGM.step++; BGM.nextTime += pat2.tempo;
+    }
+  };
+  BGM.timer=setInterval(schedule, 120); schedule();
+}
+function stopBgm(){
+  if(BGM.timer){ clearInterval(BGM.timer); BGM.timer=null; }
+  BGM.nodes.forEach(n=>{ try{n.stop();}catch(e){} }); BGM.nodes=[];
+}
+function setBgmMode(mode){ if(BGM.mode!==mode) startBgm(mode); }
+
+// 화면 흔들림
+function shake(intensity){
+  const el=document.getElementById('battle'); if(!el) return;
+  el.classList.remove('shake-s','shake-m','shake-l');
+  void el.offsetWidth; // reflow
+  el.classList.add(intensity==='l'?'shake-l':intensity==='m'?'shake-m':'shake-s');
+  setTimeout(()=>el.classList.remove('shake-s','shake-m','shake-l'), 500);
+}
+// 데미지 팝업 (전장 좌표 → 화면)
+function popDamage(col,row, text, kind){
+  const wrap=document.getElementById('bmapwrap'); const svg=document.getElementById('bsvg');
+  if(!wrap||!svg) return;
+  const {x,y}=axialToPixel(col,row);
+  const vb=svg.viewBox.baseVal; const r=svg.getBoundingClientRect();
+  const px=(x-vb.x)/vb.width*r.width, py=(y-vb.y)/vb.height*r.height;
+  const d=document.createElement('div'); d.className='dmg-pop '+(kind||'');
+  d.textContent=text;
+  d.style.left=px+'px'; d.style.top=py+'px';
+  wrap.appendChild(d);
+  setTimeout(()=>d.remove(), 900);
+}
+// 타격 플래시(유닛 위치)
+function hitFlash(col,row){
+  const wrap=document.getElementById('bmapwrap'); const svg=document.getElementById('bsvg'); if(!wrap||!svg) return;
+  const {x,y}=axialToPixel(col,row);
+  const vb=svg.viewBox.baseVal; const r=svg.getBoundingClientRect();
+  const px=(x-vb.x)/vb.width*r.width, py=(y-vb.y)/vb.height*r.height;
+  const f=document.createElement('div'); f.className='hit-flash';
+  f.style.left=px+'px'; f.style.top=py+'px';
+  wrap.appendChild(f); setTimeout(()=>f.remove(),400);
+}
+// 전장 좌표 → 화면 픽셀
+function hexToScreen(col,row){
+  const svg=document.getElementById('bsvg'); const {x,y}=axialToPixel(col,row);
+  const vb=svg.viewBox.baseVal; const r=svg.getBoundingClientRect();
+  return { px:(x-vb.x)/vb.width*r.width, py:(y-vb.y)/vb.height*r.height };
+}
+// 전체화면 임팩트 플래시
+function impactFlash(kind){
+  const el=document.getElementById('impactFlash'); if(!el) return;
+  el.className=''; void el.offsetWidth;
+  el.classList.add('go'); if(kind==='red') el.classList.add('red');
+  setTimeout(()=>{ el.className=''; }, 300);
+}
+// 참격 슬래시
+function slashFx(col,row){
+  const wrap=document.getElementById('bmapwrap'); if(!wrap) return;
+  const {px,py}=hexToScreen(col,row);
+  const s=document.createElement('div'); s.className='slash go';
+  s.style.left=px+'px'; s.style.top=py+'px';
+  wrap.appendChild(s); setTimeout(()=>s.remove(),320);
+}
+// 파티클 폭발 (병사 흩어짐)
+function spawnParticles(col,row, count, color){
+  const wrap=document.getElementById('bmapwrap'); if(!wrap) return;
+  const {px,py}=hexToScreen(col,row);
+  for(let i=0;i<count;i++){
+    const p=document.createElement('div'); p.className='particle';
+    p.style.left=px+'px'; p.style.top=py+'px';
+    p.style.background=color||'#c33';
+    wrap.appendChild(p);
+    const ang=Math.random()*Math.PI*2, dist=25+Math.random()*55, dur=400+Math.random()*400;
+    const dx=Math.cos(ang)*dist, dy=Math.sin(ang)*dist-20;
+    p.animate([
+      {transform:'translate(0,0) scale(1)',opacity:1},
+      {transform:`translate(${dx}px,${dy+40}px) scale(.3)`,opacity:0}
+    ],{duration:dur,easing:'cubic-bezier(.3,.7,.5,1)'});
+    setTimeout(()=>p.remove(),dur);
+  }
+}
+// 일기토 집중선
+function focusLinesFx(){
+  const el=document.getElementById('focusLines'); if(!el) return;
+  el.className=''; void el.offsetWidth; el.classList.add('go');
+  setTimeout(()=>{ el.className=''; }, 600);
+}
+
+/* ---------- 전투 맵 확대/축소 ---------- */
+const BVIEW={ x:0,y:0,w:765,h:645, baseW:765, baseH:645, dragging:false, dragged:false, lastX:0,lastY:0, pinch:0 };
+function resetBattleView(){ BVIEW.x=0;BVIEW.y=0;BVIEW.w=BVIEW.baseW;BVIEW.h=BVIEW.baseH; applyBView(); }
+function applyBView(){ const s=document.getElementById('bsvg'); if(s) s.setAttribute('viewBox',`${BVIEW.x} ${BVIEW.y} ${BVIEW.w} ${BVIEW.h}`); }
+function bScale(){ return BVIEW.baseW/BVIEW.w; }
+function bZoomAt(cx,cy,f){
+  let ns=Math.max(0.6,Math.min(2.5,bScale()*f));
+  const nw=BVIEW.baseW/ns, nh=BVIEW.baseH/ns;
+  BVIEW.x=cx-(cx-BVIEW.x)*(nw/BVIEW.w); BVIEW.y=cy-(cy-BVIEW.y)*(nh/BVIEW.h);
+  BVIEW.w=nw; BVIEW.h=nh; applyBView();
+}
+function bSvgPoint(clientX,clientY){ const s=document.getElementById('bsvg'); const r=s.getBoundingClientRect();
+  return { x:BVIEW.x+(clientX-r.left)/r.width*BVIEW.w, y:BVIEW.y+(clientY-r.top)/r.height*BVIEW.h }; }
+function initBattleControls(){
+  const svg=document.getElementById('bsvg'); if(!svg||svg.dataset.ctrl) return; svg.dataset.ctrl='1';
+  svg.addEventListener('wheel',(e)=>{ e.preventDefault(); const p=bSvgPoint(e.clientX,e.clientY); bZoomAt(p.x,p.y,e.deltaY<0?1.15:0.87); },{passive:false});
+  const ptrs=new Map();
+  svg.addEventListener('pointerdown',(e)=>{ svg.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    BVIEW.dragging=true; BVIEW.dragged=false; BVIEW.lastX=e.clientX; BVIEW.lastY=e.clientY;
+    if(ptrs.size===2){ const p=[...ptrs.values()]; BVIEW.pinch=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); } });
+  svg.addEventListener('pointermove',(e)=>{ if(!ptrs.has(e.pointerId))return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===2){ const p=[...ptrs.values()]; const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+      if(BVIEW.pinch>0){ const m=bSvgPoint((p[0].x+p[1].x)/2,(p[0].y+p[1].y)/2); bZoomAt(m.x,m.y,d/BVIEW.pinch); } BVIEW.pinch=d; BVIEW.dragged=true; }
+    else if(BVIEW.dragging){ const dx=e.clientX-BVIEW.lastX, dy=e.clientY-BVIEW.lastY;
+      if(Math.abs(dx)+Math.abs(dy)>3) BVIEW.dragged=true;
+      const r=svg.getBoundingClientRect(); BVIEW.x-=dx*(BVIEW.w/r.width); BVIEW.y-=dy*(BVIEW.h/r.height);
+      BVIEW.lastX=e.clientX; BVIEW.lastY=e.clientY; applyBView(); } });
+  const up=(e)=>{ ptrs.delete(e.pointerId); if(ptrs.size<2)BVIEW.pinch=0; if(ptrs.size===0){ BVIEW.dragging=false; setTimeout(()=>{BVIEW.dragged=false;},50);} };
+  svg.addEventListener('pointerup',up); svg.addEventListener('pointercancel',up);
+}
+
+/* ============================================================
+   헥스맵 전투 (삼국지 3식)
+   ============================================================ */
+const HEX = { cols:13, rows:9, size:34 };
+const B = { active:false, hexes:[], units:[], sel:null, phase:'player', atkCity:null, defCity:null, turn:1 };
+
+function axialToPixel(col,row){
+  const s=HEX.size;
+  const x = s*1.5*col + s*1.6;
+  const y = s*Math.sqrt(3)*(row + (col%2)*0.5) + s*1.4;
+  return {x,y};
+}
+function hexNeighbors(col,row){
+  const even = col%2===0;
+  const dirs = even
+    ? [[+1,0],[+1,-1],[0,-1],[-1,-1],[-1,0],[0,+1]]
+    : [[+1,+1],[+1,0],[0,-1],[-1,0],[-1,+1],[0,+1]];
+  return dirs.map(([dc,dr])=>({col:col+dc,row:row+dr}))
+    .filter(h=>h.col>=0&&h.col<HEX.cols&&h.row>=0&&h.row<HEX.rows);
+}
+function hexDist(a,b){
+  // convert offset(col,row) to cube
+  const ac = offToCube(a.col,a.row), bc=offToCube(b.col,b.row);
+  return (Math.abs(ac.x-bc.x)+Math.abs(ac.y-bc.y)+Math.abs(ac.z-bc.z))/2;
+}
+function offToCube(col,row){
+  const x=col; const z=row-(col-(col&1))/2; const y=-x-z; return {x,y,z};
+}
+
+// 도시별 실제 지리 프로파일 → 전투 지형 결정
+function cityTerrainProfile(name){
+  const P={
+    // 강·수변 (형주·강동·회수) — 강 많음
+    '양양':{label:'한수 유역',rivers:2,hillClusters:1,forestClusters:2,scatter:0.06},
+    '강릉':{label:'장강 강변',rivers:2,hillClusters:0,forestClusters:2,scatter:0.05},
+    '강하':{label:'장강 하구',rivers:3,hillClusters:0,forestClusters:1,scatter:0.05},
+    '건업':{label:'장강 하류',rivers:2,hillClusters:1,forestClusters:2,scatter:0.05},
+    '오':{label:'강남 수향',rivers:2,hillClusters:0,forestClusters:2,scatter:0.06},
+    '회계':{label:'강남 구릉',rivers:1,hillClusters:2,forestClusters:2,scatter:0.08},
+    '수춘':{label:'회수 유역',rivers:2,hillClusters:1,forestClusters:1,scatter:0.06},
+    '광릉':{label:'장강 북안',rivers:2,hillClusters:0,forestClusters:1,scatter:0.05},
+    '예장':{label:'파양호반',rivers:2,hillClusters:1,forestClusters:2,scatter:0.06},
+    // 산악 (익주·한중·서량) — 산 많음
+    '성도':{label:'촉 분지',rivers:1,hillClusters:3,forestClusters:2,scatter:0.10},
+    '강주':{label:'파산 산지',rivers:1,hillClusters:3,forestClusters:1,scatter:0.10},
+    '재동':{label:'검각 산도',rivers:0,hillClusters:4,forestClusters:1,scatter:0.10},
+    '한중':{label:'진령 산중',rivers:1,hillClusters:4,forestClusters:1,scatter:0.10},
+    '건녕':{label:'남중 산악',rivers:0,hillClusters:4,forestClusters:2,scatter:0.10},
+    '천수':{label:'농서 고원',rivers:0,hillClusters:3,forestClusters:0,scatter:0.08},
+    '무위':{label:'하서 회랑',rivers:0,hillClusters:2,forestClusters:0,scatter:0.06},
+    '안정':{label:'관롱 산지',rivers:1,hillClusters:3,forestClusters:0,scatter:0.08},
+    '무릉':{label:'무릉 산림',rivers:1,hillClusters:2,forestClusters:3,scatter:0.10},
+    // 관문·요새 (사례) — 험지
+    '낙양':{label:'낙양 분지',rivers:1,hillClusters:2,forestClusters:1,scatter:0.06},
+    '장안':{label:'관중 평야',rivers:1,hillClusters:2,forestClusters:0,scatter:0.05},
+    '홍농':{label:'효함 험로',rivers:1,hillClusters:3,forestClusters:1,scatter:0.08},
+    // 삼림 (유주·병주)
+    '북평':{label:'유주 변경',rivers:0,hillClusters:2,forestClusters:3,scatter:0.10},
+    '계':{label:'연산 산록',rivers:1,hillClusters:2,forestClusters:2,scatter:0.09},
+    '양평':{label:'요동 벌판',rivers:1,hillClusters:1,forestClusters:3,scatter:0.09},
+    '진양':{label:'태원 분지',rivers:1,hillClusters:2,forestClusters:2,scatter:0.08},
+    '상당':{label:'태항 산중',rivers:0,hillClusters:4,forestClusters:1,scatter:0.10},
+    // 남방
+    '남해':{label:'영남 밀림',rivers:2,hillClusters:1,forestClusters:3,scatter:0.10},
+    '교지':{label:'교주 열림',rivers:2,hillClusters:1,forestClusters:3,scatter:0.10},
+    '장사':{label:'상강 유역',rivers:2,hillClusters:1,forestClusters:2,scatter:0.07},
+  };
+  // 기본: 중원 평야 (허창·진류·업·남피·여남·복양·산양·초·하비·소패·북해·제남·완·평원)
+  return P[name] || {label:'중원 평야',rivers:1,hillClusters:1,forestClusters:1,scatter:0.06};
+}
+
+function startBattle(atkId, defId, atkPicks, defPicks){
+  closeModal();
+  const atk=G.cities[atkId], def=G.cities[defId];
+  B.active=true; B.atkCity=atkId; B.defCity=defId; B.turn=1; B.sel=null; B.duelDone=false;
+  B.playerSide = defPicks ? 'def' : 'atk'; // 플레이어가 조작하는 쪽
+  B.phase = B.playerSide; // 플레이어 페이즈 먼저
+  B.atkGarrison=0; B.defGarrison=0;
+  // === 지형 생성: 방어 도시의 실제 지리 프로파일 반영 ===
+  B.hexes=[];
+  for(let col=0;col<HEX.cols;col++)for(let row=0;row<HEX.rows;row++){
+    B.hexes.push({col,row,terr:'plain'});
+  }
+  const prof = cityTerrainProfile(def.name);
+  B.terrainName = prof.label;
+  // 강: 프로파일의 강 개수만큼 세로 줄기
+  for(let r=0;r<prof.rivers;r++){
+    let cc=2+Math.floor(Math.random()*(HEX.cols-4));
+    for(let row=0;row<HEX.rows;row++){
+      cc=Math.max(1,Math.min(HEX.cols-2, cc+(Math.random()<0.55?0:(Math.random()<0.5?-1:1))));
+      const h=hexAt(cc,row); if(h) h.terr='river';
+      if(Math.random()<0.3){ const h2=hexAt(cc+1,row); if(h2&&h2.terr==='plain') h2.terr='river'; } // 넓은 강
+    }
+  }
+  // 산/구릉: 프로파일 hillDensity
+  const hillClusters=prof.hillClusters;
+  for(let k=0;k<hillClusters;k++){
+    const cx=1+Math.floor(Math.random()*(HEX.cols-2)), cy=Math.floor(Math.random()*HEX.rows);
+    for(const h of B.hexes){ if(Math.abs(h.col-cx)+Math.abs(h.row-cy)<=1+Math.floor(Math.random()*2) && h.terr==='plain' && Math.random()<0.75) h.terr='hill'; }
+  }
+  // 숲 군집
+  for(let k=0;k<prof.forestClusters;k++){
+    const cx=2+Math.floor(Math.random()*(HEX.cols-4)), cy=1+Math.floor(Math.random()*(HEX.rows-2));
+    for(const h of B.hexes){ if(Math.abs(h.col-cx)+Math.abs(h.row-cy)<=1 && h.terr==='plain' && Math.random()<0.7) h.terr='forest'; }
+  }
+  // 잔여 산발
+  for(const h of B.hexes){ if(h.terr==='plain' && Math.random()<prof.scatter) h.terr = Math.random()<0.5?'hill':'forest'; }
+
+  // 세로로 고르게 배치하는 헬퍼
+  const placeRows=(n)=>{ const rows=[]; for(let i=0;i<n;i++){ rows.push(Math.round((i+1)*HEX.rows/(n+1))); } return rows; };
+  B.units=[];
+  // === 공격측 편성 ===
+  if(atkPicks && atkPicks.length){
+    const total=atkPicks.reduce((s,p)=>s+p.troops,0);
+    B.atkSent=total; B.atkGarrison=atk.troops-total;
+    const rows=placeRows(atkPicks.length);
+    atkPicks.forEach((p,i)=>{
+      const g=G.generals.find(x=>x.id===p.genId);
+      const u=makeUnit(g, p.troops, atk.train, 'atk', i%2, rows[i]); u.tt=p.ttype; B.units.push(u);
+    });
+  } else {
+    const atkGens=G.generals.filter(g=>g.cityId===atkId).slice(0,4);
+    const atkTroops=atk.troops; B.atkSent=atkTroops; B.atkGarrison=0;
+    const rows=placeRows(Math.max(1,atkGens.length));
+    atkGens.forEach((g,i)=>{ B.units.push(makeUnit(g, Math.floor(atkTroops/atkGens.length), atk.train, 'atk', i%2, rows[i])); });
+    if(!atkGens.length && atkTroops>0) B.units.push(makeUnit(null, atkTroops, atk.train, 'atk', 0, Math.floor(HEX.rows/2)));
+  }
+  // === 방어측 편성 ===
+  if(defPicks && defPicks.length){
+    const total=defPicks.reduce((s,p)=>s+p.troops,0);
+    B.defSent=total; B.defGarrison=def.troops-total;
+    const rows=placeRows(defPicks.length);
+    defPicks.forEach((p,i)=>{
+      const g=G.generals.find(x=>x.id===p.genId);
+      const u=makeUnit(g, p.troops, def.train, 'def', HEX.cols-1-(i%2), rows[i]); u.tt=p.ttype; B.units.push(u);
+    });
+  } else {
+    const defGens=G.generals.filter(g=>g.cityId===defId).slice(0,4);
+    const defTroops=def.troops; B.defSent=defTroops; B.defGarrison=0;
+    const rows=placeRows(Math.max(1,defGens.length));
+    defGens.forEach((g,i)=>{ B.units.push(makeUnit(g, Math.floor(defTroops/Math.max(1,defGens.length)), def.train, 'def', HEX.cols-1-(i%2), rows[i])); });
+    if(!defGens.length && defTroops>0) B.units.push(makeUnit(null, defTroops, def.train, 'def', HEX.cols-1, Math.floor(HEX.rows/2)));
+  }
+
+  // === 우호 무장 사기 보너스 (같은 편 상성) ===
+  ['atk','def'].forEach(side=>{
+    const ab=allyMoraleBonus(B.units, side);
+    if(ab.bonus>0){
+      B.units.filter(u=>u.side===side).forEach(u=>{ u.morale=Math.min(120, u.morale+ab.bonus); });
+      if(side===B.playerSide && ab.pairs.length){
+        const p=ab.pairs[0];
+        B.allyBondMsg = `${p.a}·${p.b} ${REL_LABEL[p.type]} — 사기 상승!`;
+      }
+    }
+  });
+
+  document.getElementById('battle').classList.add('show');
+  const roleTxt = (B.playerSide==='def' ? `🛡️ ${def.name} 방어전` : `${atk.name}→${def.name}`) + ` · ${B.terrainName||''}`;
+  document.getElementById('btitle').textContent=roleTxt;
+  resetBattleView();
+  renderBattle();
+  // 개전 대사 (플레이어측 대표 무장)
+  const leadUnit = B.units.find(u=>u.side===B.playerSide && u.gen);
+  const cry = leadUnit ? genLine(leadUnit.gen, 'battle') : '';
+  const sideTxt = B.playerSide==='def' ? '당신은 <b>수비측</b>입니다. ' : '';
+  let intro = sideTxt;
+  if(cry) intro += `<b style="color:${personaColor(leadUnit.gen)}">${leadUnit.name}: "${cry}"</b><br>`;
+  if(B.allyBondMsg) intro += `<span style="color:#8fd">🤝 ${B.allyBondMsg}</span><br>`;
+  intro += '부대 선택 → 이동/공격. <b>🐎기병>🛡️보병>🏹궁병</b> 상성.';
+  binfo(intro);
+  sfx('start'); haptic(30);
+  setBgmMode('battle'); // 전투 음악
+  initBattleControls();
+}
+function makeUnit(gen, troops, train, side, col, row){
+  const tt = gen? troopType(gen) : TROOP_TYPES.inf;
+  return {
+    id:'u'+Math.random().toString(36).slice(2,7),
+    gen, name: gen?gen.name:'병사', troops, maxTroops:troops,
+    train, morale:100, side, col, row,
+    moved:false, acted:false,
+    war: gen?gen.war:50, lead: gen?gen.lead:50, int: gen?gen.int:50,
+    tt: tt.key, // 병과 key
+  };
+}
+function unitTT(u){ return TROOP_TYPES[u.tt] || TROOP_TYPES.inf; }
+function enemySide(){ return B.playerSide==='atk'?'def':'atk'; }
+function isPlayerUnit(u){ return u.side===B.playerSide; }
+function playerUnits(){ return B.units.filter(u=>u.side===B.playerSide && u.troops>0); }
+function enemyUnits(){ return B.units.filter(u=>u.side===enemySide() && u.troops>0); }
+
+function terrainColor(t){
+  return {plain:'#5a6b3a', forest:'#2f4a26', hill:'#7a6540', river:'#2f5a7a'}[t];
+}
+function terrainDefBonus(t){ return {plain:0,forest:0.2,hill:0.3,river:-0.1}[t]; }
+function terrainMoveCost(t){ return {plain:1,forest:2,hill:2,river:3}[t]; }
+
+function renderBattle(){
+  const svg=document.getElementById('bsvg');
+  const s=HEX.size; let h='';
+  // hexes
+  for(const hx of B.hexes){
+    const {x,y}=axialToPixel(hx.col,hx.row);
+    const pts=hexPoints(x,y,s*0.95);
+    const isMove = B.sel && canMoveTo(B.sel, hx);
+    const isAtk = B.sel && canAttackTo(B.sel, hx);
+    let stroke='#2a2318', sw=1;
+    if(isMove){ stroke='#d4af37'; sw=2; }
+    if(isAtk){ stroke='#e04040'; sw=2.5; }
+    h+=`<polygon class="hex" data-col="${hx.col}" data-row="${hx.row}" points="${pts}"
+      fill="${terrainColor(hx.terr)}" stroke="${stroke}" stroke-width="${sw}" opacity="0.9"/>`;
+  }
+  // units
+  for(const u of B.units){
+    if(u.troops<=0) continue;
+    const {x,y}=axialToPixel(u.col,u.row);
+    const tt=unitTT(u);
+    const col = isPlayerUnit(u)?'#3a6ea5':'#a83232';
+    const ttCol = {cav:'#ff8080',inf:'#80c0ff',arc:'#80ffaa'}[u.tt];
+    const selRing = (B.sel && B.sel.id===u.id)?'<circle cx="'+x+'" cy="'+y+'" r="'+(s*0.85)+'" fill="none" stroke="#fff" stroke-width="2.5"/>':'';
+    h+=`<g class="hexunit" data-uid="${u.id}">
+      <circle cx="${x}" cy="${y}" r="${s*0.62}" fill="${col}" stroke="${ttCol}" stroke-width="2.5" opacity="${u.acted?0.55:1}"/>
+      <text class="hexunit-label" x="${x}" y="${y-6}" style="font-size:11px">${tt.icon}</text>
+      <text class="hexunit-label" x="${x}" y="${y+5}">${u.name}</text>
+      <text class="hexunit-label" x="${x}" y="${y+15}" style="font-size:8px">${(u.troops/1000).toFixed(1)}천</text>
+      ${selRing}</g>`;
+  }
+  svg.innerHTML=h;
+  svg.querySelectorAll('.hex').forEach(n=>{
+    n.addEventListener('click',()=>onHexClick(parseInt(n.dataset.col),parseInt(n.dataset.row)));
+  });
+  svg.querySelectorAll('.hexunit').forEach(n=>{
+    n.addEventListener('click',(e)=>{ e.stopPropagation(); onUnitClick(n.dataset.uid); });
+  });
+  document.getElementById('bturn').textContent=`${B.turn}턴 · ${B.phase===B.playerSide?'아군 페이즈':'적군 페이즈'}`;
+}
+function hexPoints(cx,cy,r){
+  let p=[];
+  for(let i=0;i<6;i++){ const a=Math.PI/180*(60*i); p.push((cx+r*Math.cos(a)).toFixed(1)+','+(cy+r*Math.sin(a)).toFixed(1)); }
+  return p.join(' ');
+}
+function unitAt(col,row){ return B.units.find(u=>u.col===col&&u.row===row&&u.troops>0); }
+function hexAt(col,row){ return B.hexes.find(h=>h.col===col&&h.row===row); }
+
+function canMoveTo(u, hx){
+  if(!isPlayerUnit(u)||u.moved) return false;
+  if(unitAt(hx.col,hx.row)) return false;
+  const d=hexDist({col:u.col,row:u.row},hx);
+  return d>=1 && d<=unitTT(u).move; // 병과별 이동력 (기3/보2/궁2)
+}
+function canAttackTo(u, hx){
+  if(!isPlayerUnit(u)||u.acted) return false;
+  const tgt=unitAt(hx.col,hx.row);
+  if(!tgt||tgt.side!==enemySide()) return false;
+  return hexDist({col:u.col,row:u.row},hx)<=unitTT(u).range; // 궁병은 2칸 사거리
+}
+
+function onUnitClick(uid){
+  if(BVIEW.dragged) return; // 지도 드래그 중엔 무시
+  const u=B.units.find(x=>x.id===uid);
+  if(!u||u.troops<=0) return;
+  if(isPlayerUnit(u) && B.phase===B.playerSide){
+    if(u.acted){ binfo(`${u.name} 부대는 이미 행동했습니다.`); return; }
+    B.sel=u; sfx('select'); haptic(15); renderBattle();
+    const tt=unitTT(u);
+    const aptTxt=u.gen?` (${tt.name}적성 ${aptLabel(u.gen,tt.key)})`:'';
+    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격`);
+    renderBattleCmd();
+  } else {
+    if(B.sel && canAttackTo(B.sel,{col:u.col,row:u.row})){
+      maybeDuelThenAttack(B.sel,u);
+    } else {
+      const tt=unitTT(u);
+      binfo(`[적] ${u.name} ${tt.icon}${tt.name} · 병력 ${u.troops} · 사기 ${u.morale}`);
+    }
+  }
+}
+function onHexClick(col,row){
+  if(BVIEW.dragged) return;
+  const hx=hexAt(col,row); if(!hx) return;
+  const tgt=unitAt(col,row);
+  if(tgt){ onUnitClick(tgt.id); return; }
+  if(B.sel && canMoveTo(B.sel,hx)){
+    B.sel.col=col; B.sel.row=row; B.sel.moved=true;
+    sfx('move'); haptic(20);
+    renderBattle();
+    binfo(`${B.sel.name} 이동 완료. 인접 적을 공격하거나 대기하세요.`);
+    renderBattleCmd();
+  }
+}
+
+function renderBattleCmd(){
+  const cmd=document.getElementById('bcmd'); cmd.innerHTML='';
+  if(B.sel && B.phase===B.playerSide){
+    const wait=document.createElement('button'); wait.className='btn'; wait.textContent='대기(행동종료)';
+    wait.onclick=()=>{ B.sel.acted=true; B.sel.moved=true; B.sel=null; renderBattle(); checkPhaseEnd(); renderBattleCmd(); binfo('부대를 선택하세요.'); };
+    cmd.appendChild(wait);
+  }
+  const end=document.createElement('button'); end.className='btn primary'; end.textContent='아군 턴 종료';
+  end.onclick=endPlayerPhase; cmd.appendChild(end);
+  if(B.playerSide==='atk'){
+    const retreat=document.createElement('button'); retreat.className='btn'; retreat.textContent='철수';
+    retreat.onclick=()=>{ showModal('철수','전투에서 철수하시겠습니까? 공격이 무효화됩니다.',
+      [{label:'취소',cls:'',fn:closeModal},{label:'철수',cls:'primary',fn:()=>{closeModal();endBattle('retreat');}}]); };
+    cmd.appendChild(retreat);
+  }
+}
+
+// 일기토 조건 확인 후 실행 → 이후 일반 공격
+function maybeDuelThenAttack(atkU, defU){
+  // 양쪽 무장 존재 + 둘 다 무력 70+ + 인접(1칸) + 30% 확률
+  const canDuel = atkU.gen && defU.gen && atkU.war>=70 && defU.war>=70
+    && hexDist(atkU,defU)===1 && !B.duelDone;
+  if(canDuel && Math.random()<0.35){
+    const rel = relationBetween(atkU.name, defU.name);
+    let relLine='';
+    if(rel){
+      if(rel.type==='foe') relLine=`<div style="color:#f66;font-size:13px;margin-bottom:6px">⚔ 숙적! 서로 물러설 수 없다 (투지 상승)</div>`;
+      else if(rel.type==='rival') relLine=`<div style="color:#fc6;font-size:13px;margin-bottom:6px">🔥 숙명의 라이벌</div>`;
+      else if(rel.type==='sworn'||rel.type==='lord') relLine=`<div style="color:#8fd;font-size:13px;margin-bottom:6px">${REL_LABEL[rel.type]} 관계… 창을 겨누는가</div>`;
+    }
+    const cry = genLine(atkU.gen,'duel');
+    showModal('⚔️ 일기토!',
+      `<div style="text-align:center">
+        ${relLine}
+        <b style="color:${personaColor(atkU.gen)}">${atkU.name}</b> <span style="font-size:11px;color:#999">${personaLabel(atkU.gen)}</span> (무력 ${atkU.war})<br>
+        <span style="color:#d4af37;font-size:20px">VS</span><br>
+        <b style="color:${personaColor(defU.gen)}">${defU.name}</b> <span style="font-size:11px;color:#999">${personaLabel(defU.gen)}</span> (무력 ${defU.war})<br>
+        <div style="color:#dca;font-style:italic;margin:8px 0">"${cry}"</div>
+        일기토를 걸어 도전하시겠습니까?<br>
+        <span style="font-size:12px;color:#999">승리 시 적에 큰 타격, 패배 시 아군 피해.</span>
+      </div>`,
+      [{label:'일반 공격',cls:'',fn:()=>{ closeModal(); doAttack(atkU,defU); }},
+       {label:'⚔️ 도전!',cls:'primary',fn:()=>{ closeModal(); doDuel(atkU,defU); }}]);
+  } else {
+    doAttack(atkU,defU);
+  }
+}
+
+function doDuel(atkU, defU){
+  sfx('duel'); hapticPattern([40,60,40,60,80]); focusLinesFx();
+  // 숙적/라이벌 관계 → 호걸은 투지, 판정 보정
+  const rel = relationBetween(atkU.name, defU.name);
+  let aBonus=1.0, dBonus=1.0;
+  if(rel && (rel.type==='foe'||rel.type==='rival')){
+    if(personaOf(atkU.gen)==='brave') aBonus=1.12; // 호걸은 숙적전에서 분발
+    if(personaOf(defU.gen)==='brave') dBonus=1.12;
+  }
+  // 무력 + 사기 + 무작위. 라운드 3회 판정
+  let aScore=0, dScore=0, rounds=[];
+  for(let i=0;i<3;i++){
+    const a=atkU.war*aBonus*(0.7+atkU.morale/300)+Math.random()*40;
+    const d=defU.war*dBonus*(0.7+defU.morale/300)+Math.random()*40;
+    if(a>=d){ aScore++; rounds.push(`${i+1}합: ${atkU.name} 우세`); }
+    else { dScore++; rounds.push(`${i+1}합: ${defU.name} 우세`); }
+  }
+  const win = aScore>dScore;
+  B.duelDone=true;
+  let result='';
+  if(win){
+    const loss=Math.min(defU.troops, Math.floor(defU.troops*0.25+300));
+    defU.troops-=loss; defU.morale=Math.max(0,defU.morale-35);
+    atkU.morale=Math.min(120,atkU.morale+10);
+    const cry=genLine(atkU.gen,'win');
+    result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
+    shake('l'); sfx('crit'); haptic(120); impactFlash(); slashFx(defU.col,defU.row); popDamage(defU.col,defU.row,'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,14,'#d44');
+  } else {
+    const loss=Math.min(atkU.troops, Math.floor(atkU.troops*0.18+200));
+    atkU.troops-=loss; atkU.morale=Math.max(0,atkU.morale-25);
+    defU.morale=Math.min(120,defU.morale+10);
+    const cry=genLine(defU.gen,'win');
+    result=`<span style="color:#f99">${defU.name} 승리...</span> 아군 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
+    shake('l'); sfx('crit'); haptic(150); impactFlash('red'); slashFx(atkU.col,atkU.row); popDamage(atkU.col,atkU.row,'一騎討 敗','counter'); hitFlash(atkU.col,atkU.row); spawnParticles(atkU.col,atkU.row,14,'#4a8ad4');
+  }
+  renderBattle();
+  showModal('⚔️ 일기토 결과',
+    `<div style="line-height:1.8">${rounds.join('<br>')}<br><br><b>${result}</b></div>`,
+    [{label:'이어서 교전',cls:'primary',fn:()=>{ closeModal();
+        if(atkU.troops>0 && defU.troops>0){ doAttack(atkU,defU); }
+        else { atkU.acted=true; atkU.moved=true; B.sel=null; renderBattle(); checkBattleEnd(); checkPhaseEnd(); renderBattleCmd(); }
+     }}]);
+}
+
+function doAttack(atkU, defU){
+  const dhex=hexAt(defU.col,defU.row);
+  const defBonus=terrainDefBonus(dhex.terr);
+  const atkTT=unitTT(atkU), defTT=unitTT(defU);
+  const counterMul=counterBonus(atkTT.key, defTT.key); // 병과 상성
+  const atkApt=aptMul(atkU.gen, atkTT.key);   // 공격측 병과 적성
+  const defApt=aptMul(defU.gen, defTT.key);   // 방어측 병과 적성
+  const isRanged = hexDist(atkU,defU)>1; // 궁병 원거리 공격
+  // 데미지: 병과 공격배율·상성·적성 반영
+  const atkPower = atkU.troops*(0.35+atkU.war/300)*(0.6+atkU.train/250)*(0.5+atkU.morale/200)
+    *atkTT.atkMul*counterMul*atkApt;
+  const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt;
+  let dmg = Math.max(50, Math.floor(atkPower - defPower*0.5 + (Math.random()*200-100)));
+  dmg = Math.min(dmg, defU.troops);
+  defU.troops -= dmg;
+  defU.morale = Math.max(0, defU.morale-12);
+  // 반격: 원거리(궁병) 공격이면 반격 없음. 근접이면 반격
+  let counter=0;
+  if(defU.troops>0 && !isRanged){
+    const dCounterMul=counterBonus(defTT.key, atkTT.key);
+    counter = Math.max(20, Math.floor(defU.troops*(0.15+defU.war/400)*(0.5+defU.morale/200)*defTT.atkMul*dCounterMul*defApt + (Math.random()*100-50)));
+    counter = Math.min(counter, atkU.troops);
+    atkU.troops-=counter; atkU.morale=Math.max(0,atkU.morale-6);
+  }
+  atkU.acted=true; atkU.moved=true;
+  // === 이펙트 ===
+  const big = dmg >= defU.maxTroops*0.35 || counterMul>1.05;
+  if(isRanged){ sfx('arrow'); } else { sfx(big?'crit':'hit'); slashFx(defU.col,defU.row); }
+  hitFlash(defU.col, defU.row);
+  popDamage(defU.col, defU.row, '-'+dmg, big?'crit':'');
+  spawnParticles(defU.col, defU.row, big?12:6, isPlayerUnit(defU)?'#4a8ad4':'#d44');
+  shake(big?'m':'s');
+  haptic(big?90:45);
+  if(big) impactFlash();
+  if(counter>0){ setTimeout(()=>{ popDamage(atkU.col,atkU.row,'-'+counter,'counter'); hitFlash(atkU.col,atkU.row); spawnParticles(atkU.col,atkU.row,5,isPlayerUnit(atkU)?'#4a8ad4':'#d44'); sfx('hit'); haptic(30); }, 220); }
+  const aptTag = atkU.gen ? ` <span style="color:#dca">${atkTT.name}${aptLabel(atkU.gen,atkTT.key)}</span>` : '';
+  let msg=`<b>${atkU.name}</b>(${atkTT.icon}${aptTag}) → <b>${defU.name}</b>(${defTT.icon}) · 피해 ${dmg}`;
+  if(counterMul>1.05) msg+=` <span style="color:#8fd">[병과우세]</span>`;
+  else if(counterMul<0.95) msg+=` <span style="color:#f99">[병과열세]</span>`;
+  if(isRanged) msg+=` <span style="color:#8fa">[원거리]</span>`;
+  if(counter>0) msg+=`<br>반격 ${counter}`;
+  if(defU.troops<=0){ msg+=`<br><span style="color:#d4af37">${defU.name} 부대 궤멸!</span>`;
+    if(defU.gen){ const cry=genLine(defU.gen,'lose'); if(cry) msg+=`<br><span style="color:#c88;font-style:italic">${defU.name}: "${cry}"</span>`; }
+    setTimeout(()=>{ sfx('destroy'); shake('l'); haptic(150); impactFlash('red'); popDamage(defU.col,defU.row,'궤멸!','crit'); spawnParticles(defU.col,defU.row,20,isPlayerUnit(defU)?'#4a8ad4':'#d44'); }, 150); }
+  binfo(msg);
+  B.sel=null; renderBattle(); renderBattleCmd();
+  checkBattleEnd();
+  checkPhaseEnd();
+}
+
+function checkPhaseEnd(){
+  const alive=playerUnits();
+  if(alive.length && alive.every(u=>u.acted)){
+    // 모든 아군 행동 완료 → 자동으로 적 페이즈 안내(수동 종료도 가능)
+  }
+}
+function endPlayerPhase(){
+  B.phase=enemySide(); B.sel=null; renderBattle(); binfo('적군 페이즈...');
+  setTimeout(enemyPhase, 500);
+}
+function enemyPhase(){
+  const foes=enemyUnits();
+  let i=0;
+  function step(){
+    if(i>=foes.length){ endEnemyPhase(); return; }
+    const u=foes[i++];
+    if(u.troops<=0){ step(); return; }
+    // AI: 가장 가까운 플레이어 부대로 이동 후 공격
+    const targets=playerUnits();
+    if(!targets.length){ endEnemyPhase(); return; }
+    let target=targets.reduce((a,b)=> hexDist(u,a)<=hexDist(u,b)?a:b);
+    // 이동 (이동력만큼)
+    const mv=unitTT(u).move;
+    if(hexDist(u,target)>unitTT(u).range){
+      for(let s=0;s<mv;s++){
+        if(hexDist(u,target)<=unitTT(u).range) break;
+        const nbrs=hexNeighbors(u.col,u.row).filter(n=>!unitAt(n.col,n.row));
+        if(!nbrs.length) break;
+        nbrs.sort((a,b)=>hexDist(a,target)-hexDist(b,target));
+        u.col=nbrs[0].col; u.row=nbrs[0].row;
+      }
+    }
+    renderBattle();
+    // 공격
+    if(hexDist(u,target)<=unitTT(u).range){
+      setTimeout(()=>{ enemyAttack(u,target); setTimeout(step,400); },300);
+    } else { setTimeout(step,250); }
+  }
+  step();
+}
+function enemyAttack(atkU,defU){
+  const dhex=hexAt(defU.col,defU.row);
+  const defBonus=terrainDefBonus(dhex.terr);
+  const atkTT=unitTT(atkU), defTT=unitTT(defU);
+  const cm=counterBonus(atkTT.key,defTT.key);
+  const atkApt=aptMul(atkU.gen,atkTT.key), defApt=aptMul(defU.gen,defTT.key);
+  const isRanged=hexDist(atkU,defU)>1;
+  const atkPower=atkU.troops*(0.30+atkU.war/300)*(0.6+atkU.train/250)*(0.5+atkU.morale/200)*atkTT.atkMul*cm*atkApt;
+  const defPower=defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt;
+  let dmg=Math.max(40,Math.floor(atkPower-defPower*0.5+(Math.random()*160-80)));
+  dmg=Math.min(dmg,defU.troops); defU.troops-=dmg; defU.morale=Math.max(0,defU.morale-10);
+  const big = dmg>=defU.maxTroops*0.35 || cm>1.05;
+  if(isRanged) sfx('arrow'); else sfx(big?'crit':'hit');
+  hitFlash(defU.col,defU.row); popDamage(defU.col,defU.row,'-'+dmg, big?'crit':''); shake(big?'m':'s'); haptic(big?70:35);
+  let msg=`[적] ${atkU.name}(${atkTT.icon}) → ${defU.name}(${defTT.icon}) · 피해 ${dmg}`;
+  if(cm>1.05) msg+=' [병과우세]';
+  if(defU.troops<=0){ msg+=` — ${defU.name} 궤멸!`; setTimeout(()=>{ sfx('destroy'); shake('l'); haptic(120); }, 150); }
+  binfo(msg);
+  renderBattle(); checkBattleEnd();
+}
+function endEnemyPhase(){
+  B.turn++;
+  B.units.forEach(u=>{ u.moved=false; u.acted=false; });
+  B.phase=B.playerSide; B.duelDone=false;
+  renderBattle(); renderBattleCmd();
+  binfo('아군 페이즈. 부대를 선택하세요.');
+  if(B.turn>12){ endBattle('timeout'); }
+}
+
+function checkBattleEnd(){
+  const atkAlive=B.units.some(u=>u.side==='atk'&&u.troops>0);
+  const defAlive=B.units.some(u=>u.side==='def'&&u.troops>0);
+  if(!atkAlive || !defAlive){
+    // 플레이어 기준 승패
+    const playerAlive = playerUnits().length>0;
+    endBattle(playerAlive ? 'win' : 'lose');
+  }
+}
+
+function endBattle(result){
+  // 승패 효과음 (플레이어 기준)
+  const playerWon = playerUnits().length>0 && result!=='lose' && result!=='retreat';
+  if(result==='win'){ sfx('win'); hapticPattern([60,40,60,40,120]); }
+  else if(result==='lose'){ sfx('lose'); haptic(200); }
+  setBgmMode('field'); // 평시 음악 복귀
+  const atk=G.cities[B.atkCity], def=G.cities[B.defCity];
+  const atkRemain=B.units.filter(u=>u.side==='atk').reduce((s,u)=>s+Math.max(0,u.troops),0);
+  const defRemain=B.units.filter(u=>u.side==='def').reduce((s,u)=>s+Math.max(0,u.troops),0);
+  const atkGarrison=B.atkGarrison||0, defGarrison=B.defGarrison||0;
+  const atkGenIds=B.units.filter(u=>u.side==='atk'&&u.gen).map(u=>u.gen.id);
+  let title,msg;
+
+  if(B.playerSide==='atk'){
+    // === 플레이어 공격전 ===
+    if(result==='win'){
+      title='승리!'; msg=`${def.name}을(를) 점령했습니다! (잔여 ${atkRemain.toLocaleString()})`;
+      def.owner=G.playerFaction;
+      atkGenIds.forEach(id=>{ const g=G.generals.find(x=>x.id===id); if(g) g.cityId=def.id; });
+      def.troops=atkRemain; def.train=atk.train;
+      atk.troops=atkGarrison;
+      log(`${def.name} 점령! (잔여 ${atkRemain.toLocaleString()})`, true);
+    } else if(result==='lose'){
+      title='패배...'; msg=`${def.name} 공략 실패. 출병 부대가 전멸했습니다.`;
+      atk.troops=atkGarrison; def.troops=defRemain;
+      log(`${def.name} 공략 실패`, true);
+    } else if(result==='retreat'){
+      title='철수'; msg=`부대를 물렸습니다. (귀환 ${atkRemain.toLocaleString()})`;
+      atk.troops=atkGarrison+atkRemain; def.troops=defRemain;
+    } else {
+      title='무승부'; msg='시간 초과로 부대가 귀환합니다.';
+      atk.troops=atkGarrison+atkRemain; def.troops=defRemain;
+    }
+  } else {
+    // === 플레이어 방어전 ===
+    const atkFaction = atk.owner;
+    if(result==='win'){
+      title='방어 성공!'; msg=`${def.name}을(를) 지켜냈습니다! (잔여 ${defRemain.toLocaleString()})`;
+      def.troops=defGarrison+defRemain; // 수비 잔여 + 미출전 주둔군
+      atk.troops=Math.floor(atkRemain*0.6); // 공격군 후퇴 손실
+      log(`${def.name} 방어 성공! (${G.factions[atkFaction].name} 격퇴)`, true);
+    } else {
+      title='함락...'; msg=`${def.name}이(가) ${G.factions[atkFaction].name}에게 함락되었습니다.`;
+      def.owner=atkFaction;
+      // 공격군 무장이 점령지로
+      B.units.filter(u=>u.side==='atk'&&u.gen).forEach(u=>{ u.gen.cityId=def.id; });
+      def.troops=Math.max(300,atkRemain);
+      log(`${def.name} 함락! (${G.factions[atkFaction].name}에게 상실)`, true);
+    }
+  }
+  document.getElementById('battle').classList.remove('show');
+  B.active=false;
+  const after=()=>{ closeModal(); if(B.playerSide==='atk') useAction(atk.id); refresh(); checkGameEnd();
+    // 대기 중인 다음 방어전 처리
+    if(G.pendingDefense && G.pendingDefense.length){ const d=G.pendingDefense.shift(); setTimeout(()=>openDefenseFormation(d.atkId,d.defId),400); }
+  };
+  showModal(title, msg, [{label:'확인',cls:'primary',fn:after}]);
+}
+
+function binfo(html){ document.getElementById('binfo').innerHTML=html; }
+
+/* ============================================================
+   턴 진행 & AI
+   ============================================================ */
+document.getElementById('endturn').addEventListener('click', endTurn);
+function endTurn(){
+  // 세금/수확 결산
+  for(const c of G.cities){
+    const taxG = Math.floor(c.comm*0.5*(c.order/100));
+    c.gold += taxG;
+    if(G.month===9){ // 9월 수확
+      const harvest=Math.floor(c.agri*2*(c.order/100));
+      c.food+=harvest;
+    }
+    // 군량 소비
+    c.food = Math.max(0, c.food - Math.floor(c.troops*0.02));
+    // 치안 자연 변동
+    if(c.order<50) c.order=Math.max(0,c.order-1);
+  }
+  // AI 세력 행동
+  runAI();
+  // 날짜 진행
+  G.month++; if(G.month>12){ G.month=1; G.year++; }
+  G.turn++;
+  G.actionsLeft={};
+  // 승패 판정
+  checkGameEnd();
+  refresh();
+  if(G.selectedCity!=null) selectCity(G.selectedCity);
+  log(`—— ${G.year}년 ${G.month}월 ——`);
+  autoSave();
+  // 연합 붕괴 시점 도달
+  const breakDue = G.alliance && G.alliance.active && G.turn>=G.alliance.endTurn && !G.eventFlags.allianceBroken;
+  // 플레이어 방어전 발생 시 수비 편성 (붕괴 이벤트보다 먼저)
+  if(G.pendingDefense && G.pendingDefense.length){
+    const d=G.pendingDefense.shift();
+    setTimeout(()=>openDefenseFormation(d.atkId, d.defId), 500);
+  } else if(breakDue){
+    setTimeout(()=>allianceBreakEvent(), 500);
+  }
+}
+
+function runAI(){
+  G.pendingDefense=[]; // 플레이어가 방어할 전투 큐
+  for(const f of G.factions){
+    if(!f.alive || f.id===G.playerFaction) continue;
+    const cities=G.cities.filter(c=>c.owner===f.id);
+    if(!cities.length){ f.alive=false; continue; }
+    for(const c of cities){
+      // 간단 내정
+      if(c.gold>250 && Math.random()<0.6){
+        if(c.troops<6000 && Math.random()<0.5){ const n=1500; c.troops+=n; c.gold-=200; }
+        else { c.comm+=15; c.gold-=100; }
+      }
+      // 공격 판단
+      if(c.troops>5000 && Math.random()<0.25){
+        let tg=c.links.map(l=>G.cities[l]).filter(t=>t.owner!==f.id);
+        // 연합 규칙: 활성 중이면 동탁 외 세력끼리 불가침(동탁·공백지만 공격)
+        if(G.alliance && G.alliance.active){
+          if(f.id===G.alliance.target){
+            // 동탁: 아무나 공격 가능 (제한 없음)
+          } else {
+            // 연합 참여 세력: 동탁 또는 공백지만
+            tg=tg.filter(t=>t.owner===G.alliance.target || t.owner===-1);
+          }
+        }
+        if(tg.length){
+          const t=tg[Math.floor(Math.random()*tg.length)];
+          if(t.owner===G.playerFaction){
+            if(G.pendingDefense.length===0) G.pendingDefense.push({atkId:c.id, defId:t.id, fid:f.id});
+          } else {
+            autoResolveBattle(c,t,f.id);
+          }
+        }
+      }
+    }
+  }
+}
+function autoResolveBattle(atk,def,fid){
+  const ap=atk.troops*(1+Math.random()*0.4);
+  const dp=def.troops*(1+Math.random()*0.4)*1.15; // 방어 보정 + 공백지는 dp=0
+  if(ap>dp){
+    def.owner=fid; def.troops=Math.max(300,Math.floor(atk.troops*0.5));
+    atk.troops=Math.floor(atk.troops*0.4);
+  } else {
+    atk.troops=Math.floor(atk.troops*0.6); def.troops=Math.floor(def.troops*0.8);
+  }
+}
+
+function checkGameEnd(){
+  for(const f of G.factions){ f.alive = G.cities.some(c=>c.owner===f.id); }
+  const alive=G.factions.filter(f=>f.alive);
+  if(!G.factions[G.playerFaction].alive){
+    showModal('패망','당신의 세력이 모두 무너졌습니다. 게임 오버.',
+      [{label:'다시 시작',cls:'primary',fn:()=>location.reload()}]); return;
+  }
+  if(alive.length===1 && alive[0].id===G.playerFaction){
+    showModal('천하통일!','천하를 통일했습니다! 축하합니다.',
+      [{label:'다시 시작',cls:'primary',fn:()=>location.reload()}]);
+  }
+}
+
+/* ---------- 유틸 ---------- */
+function log(msg, hi){
+  const el=document.getElementById('msglist');
+  const d=document.createElement('div'); d.className='m'+(hi?' hi':'');
+  d.innerHTML=`<span class="mt">${G.year}.${G.month}</span>${msg}`;
+  el.prepend(d);
+  while(el.children.length>60) el.removeChild(el.lastChild);
+  // 스트립은 최신이 위로 오도록 스크롤 top
+  const strip=document.getElementById('msgstrip'); if(strip) strip.scrollTop=0;
+}
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ---------- 세이브 / 로드 ---------- */
+const SAVE_KEY='sam_gunung_save_v1';
+function doSave(){
+  try{
+    const data={ turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
+      cities:G.cities, factions:G.factions, generals:G.generals, actionsLeft:G.actionsLeft,
+      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario,
+      savedAt:new Date().toISOString() };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    toast('저장 완료 ('+G.year+'년 '+G.month+'월)');
+    log('게임을 저장했습니다.', true);
+  }catch(e){ toast('저장 실패: 저장공간 확인'); }
+}
+function doLoad(){
+  const raw=localStorage.getItem(SAVE_KEY);
+  if(!raw){ toast('저장된 게임이 없습니다'); return; }
+  showModal('불러오기', '저장된 게임을 불러오면 현재 진행 상황은 사라집니다. 계속하시겠습니까?',
+    [{label:'취소',cls:'',fn:closeModal},
+     {label:'불러오기',cls:'primary',fn:()=>{
+        try{
+          const d=JSON.parse(raw);
+          G.turn=d.turn; G.year=d.year; G.month=d.month; G.playerFaction=d.playerFaction;
+          G.cities=d.cities; G.factions=d.factions; G.generals=d.generals;
+          G.actionsLeft=d.actionsLeft||{}; G.selectedCity=null;
+          G.alliance=d.alliance||{active:false,target:1,endTurn:13};
+          G.eventFlags=d.eventFlags||{allianceFormed:true,allianceBroken:true};
+          G.scenario=d.scenario||'s190';
+          closeModal(); closeBottom(); renderAll();
+          toast('불러오기 완료 ('+G.year+'년 '+G.month+'월)');
+          log('저장된 게임을 불러왔습니다.', true);
+        }catch(e){ closeModal(); toast('불러오기 실패: 저장 손상'); }
+     }}]);
+}
+// 자동 저장 (매 턴 종료 시)
+function autoSave(){
+  try{
+    const data={ turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
+      cities:G.cities, factions:G.factions, generals:G.generals, actionsLeft:G.actionsLeft,
+      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario,
+      savedAt:new Date().toISOString(), auto:true };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  }catch(e){}
+}
+
+function renderAll(){ renderMap(); renderTop(); }
+function refresh(){ renderMap(); renderTop(); if(G.selectedCity!=null && !document.getElementById('bottom').classList.contains('hidden')) selectCity(G.selectedCity); }
+
+/* ---------- 시작: 세력 선택 / 이어하기 ---------- */
+// 플레이 가능 세력 정보 (군주 있는 세력) + 난이도
+// 세력 기본 정보 (시나리오 무관 공통 특징)
+const FACTION_INFO = {
+  0:{name:'조조', desc:'중원의 요충지. 인재가 풍부한 균형형 세력.'},
+  1:{name:'동탁', desc:'최강 무력(여포)과 대군. 사방이 적.'},
+  2:{name:'원소', desc:'하북의 명문가. 맹장 안량·문추.'},
+  4:{name:'손씨', desc:'강동의 호랑이. 손견·손책·손권으로 이어지는 강병.'},
+  5:{name:'원술', desc:'회남의 대세력. 병력은 많으나 인망이 부족.'},
+  6:{name:'유표', desc:'형주의 넓은 기반. 수성형.'},
+  7:{name:'공손찬', desc:'백마의종 기병. 유비 삼형제와 조운.'},
+  9:{name:'유언/유장', desc:'익주의 험준한 분지. 안전한 후방.'},
+  10:{name:'도겸/유비', desc:'서주. 인의의 기치.'},
+};
+function boot(){
+  initMapControls();
+  const hasSave=!!localStorage.getItem(SAVE_KEY);
+  if(hasSave){
+    showFactionOrContinue();
+  } else {
+    showScenarioSelect();
+  }
+}
+function showFactionOrContinue(){
+  showModal('群雄割據', `<div style="line-height:1.7">저장된 게임이 있습니다.<br>이어서 하거나 새 시나리오를 시작할 수 있습니다.</div>`,
+    [{label:'새 게임',cls:'',fn:()=>{ closeModal(); showScenarioSelect(); }},
+     {label:'이어하기',cls:'primary',fn:()=>{ closeModal(); startFresh(); doLoadDirect(); }}]);
+}
+// 시나리오 선택 화면
+function showScenarioSelect(){
+  ensureAudio(); // 사용자 제스처로 오디오 활성화
+  let body=`<div style="font-size:13px;color:#b8a878;margin-bottom:10px">플레이할 시나리오를 선택하세요.</div>`;
+  for(const [key,s] of Object.entries(SCENARIOS)){
+    body+=`<div class="fac-pick" onclick="pickScenario('${key}')">
+      <div class="fac-head"><b>${s.name}</b> <span style="color:#dc6;font-size:12px">${s.year}년</span></div>
+      <div class="fac-desc">${s.desc}</div></div>`;
+  }
+  showModal('시나리오 선택', body, []);
+}
+let PENDING_SCENARIO='s190';
+function pickScenario(key){
+  PENDING_SCENARIO=key;
+  closeModal();
+  showFactionSelect(key);
+}
+function showFactionSelect(scnKey){
+  const scn=SCENARIOS[scnKey]||SCENARIOS['s190'];
+  // 시나리오의 playable 세력 각각의 시작 도시·병력 계산
+  let body=`<div style="font-size:13px;color:#b8a878;margin-bottom:10px">${scn.year}년 · ${scn.name}. 플레이할 세력을 선택하세요.</div>`;
+  scn.playable.forEach(fid=>{
+    const info=FACTION_INFO[fid]||{name:FACTIONS[fid]?FACTIONS[fid].name:'?',desc:''};
+    // 이 시나리오에서 해당 세력의 도시 수 추정
+    const cityCount=estimateCityCount(scn, fid);
+    const diff = cityCount>=6?'쉬움':cityCount>=3?'보통':'어려움';
+    const diffColor={'쉬움':'#6c6','보통':'#dc6','어려움':'#e66'}[diff];
+    body+=`<div class="fac-pick" onclick="chooseFaction(${fid})">
+      <div class="fac-head"><b>${info.name}</b> <span style="color:${diffColor};font-size:12px">난이도 ${diff}</span>
+        <span style="margin-left:auto;color:#888;font-size:12px">도시 ${cityCount}</span></div>
+      <div class="fac-desc">${info.desc}</div></div>`;
+  });
+  showModal(`세력 선택 — ${scn.name}`, body,
+    [{label:'← 시나리오',cls:'',fn:()=>{ closeModal(); showScenarioSelect(); }}]);
+}
+// 시나리오에서 특정 세력의 시작 도시 수 추정
+function estimateCityCount(scn, fid){
+  const nameToDefault={}; CITY_DEFS.forEach(c=>nameToDefault[c.name]=c.owner);
+  const owners={};
+  CITY_DEFS.forEach(c=>{ owners[c.name]=c.owner; });
+  if(scn.cityOwner){ for(const [n,o] of Object.entries(scn.cityOwner)) owners[n]=o; }
+  return Object.values(owners).filter(o=>o===fid).length;
+}
+function chooseFaction(fid){
+  closeModal();
+  startFresh();
+  init(PENDING_SCENARIO, fid);
+}
+function startFresh(){
+  G.selectedCity=null; if(typeof closeBottom==='function') closeBottom();
+}
+function doLoadDirect(){
+  const raw=localStorage.getItem(SAVE_KEY); if(!raw) return;
+  try{
+    const d=JSON.parse(raw);
+    G.turn=d.turn; G.year=d.year; G.month=d.month; G.playerFaction=d.playerFaction;
+    G.cities=d.cities; G.factions=d.factions; G.generals=d.generals;
+    G.actionsLeft=d.actionsLeft||{}; G.selectedCity=null;
+    G.alliance=d.alliance||{active:false,target:1,endTurn:13};
+    G.eventFlags=d.eventFlags||{allianceFormed:true,allianceBroken:true};
+    G.scenario=d.scenario||'s190';
+    startBgm('field');
+    renderAll(); toast('이어하기 ('+G.year+'년 '+G.month+'월)');
+  }catch(e){ toast('저장 손상'); }
+}
+boot();
+
+/* ============================================================
+   PWA: 서비스워커 등록 + 설치 프롬프트
+   ============================================================ */
+// 서비스워커 등록 (오프라인 지원)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(err=>{
+      console.log('SW 등록 실패(정적 호스팅이 아니면 정상):', err);
+    });
+  });
+}
+// 설치 프롬프트 (Android/Chrome)
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  const btn=document.getElementById('installBtn');
+  if(btn) btn.classList.add('show');
+});
+function doInstall(){
+  if(!deferredPrompt){
+    // iOS 등: 수동 설치 안내
+    showModal('앱으로 설치하기',
+      `<div style="line-height:1.8">
+        <b>홈 화면에 추가</b>하면 앱처럼 전체화면으로 실행되고 오프라인에서도 플레이할 수 있습니다.<br><br>
+        <b>iPhone (Safari):</b><br>
+        하단 <b>공유 버튼</b> → <b>홈 화면에 추가</b><br><br>
+        <b>Android (Chrome):</b><br>
+        우측 상단 <b>⋮ 메뉴</b> → <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>
+      </div>`,
+      [{label:'확인',cls:'primary',fn:closeModal}]);
+    return;
+  }
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(()=>{
+    deferredPrompt=null;
+    const btn=document.getElementById('installBtn');
+    if(btn) btn.classList.remove('show');
+  });
+}
+// 이미 설치된 경우 버튼 숨김
+window.addEventListener('appinstalled', ()=>{
+  const btn=document.getElementById('installBtn');
+  if(btn) btn.classList.remove('show');
+  toast('앱이 설치되었습니다!');
+});
+// iOS이면서 미설치 상태면 설치 버튼 노출(수동 안내용)
+(function(){
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  const standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if(isIOS && !standalone){
+    const btn=document.getElementById('installBtn');
+    if(btn) btn.classList.add('show');
+  }
+})();
+
+</script>
+<button id="installBtn" onclick="doInstall()">📥 앱 설치</button>
+</body>
+</html>
