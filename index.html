@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.31';
+const GAME_VERSION = 'v2.32';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2447,38 +2447,124 @@ function toggleFX(){ FX.enabled=!FX.enabled; const b=document.getElementById('fx
   if(b){ b.textContent=FX.enabled?'🔊':'🔇'; b.classList.toggle('off',!FX.enabled); }
   if(!FX.enabled){ stopBgm(); } else { sfx('select'); startBgm(BGM.mode||'field'); } }
 
-/* ---------- 배경음악 (절차적 생성, 삼국지풍) ---------- */
-const BGM = { timer:null, mode:null, nodes:[], nextTime:0, step:0, master:null };
-// 오리엔탈 5음계 (C 궁상각치우 + 옥타브)
-const PENTA = [261.63,293.66,329.63,392.00,440.00, 523.25,587.33,659.25,784.00,880.00];
-const PENTA_LOW = [130.81,146.83,164.81,196.00,220.00];
-function noteFreq(scale, i){ return scale[((i%scale.length)+scale.length)%scale.length]; }
-function bgmTone(freq,start,dur,gain,wave){
-  const ctx=FX.audioCtx; if(!ctx) return;
-  const o=ctx.createOscillator(), g=ctx.createGain();
-  o.type=wave||'triangle'; o.frequency.value=freq;
-  g.gain.setValueAtTime(0.0001,start);
-  g.gain.exponentialRampToValueAtTime(gain,start+0.04);
-  g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
-  o.connect(g); g.connect(BGM.master||ctx.destination); o.start(start); o.stop(start+dur+0.05);
-  BGM.nodes.push(o);
+/* ---------- 배경음악 (절차적 생성, 삼국지풍 · 악기 합성) ---------- */
+const BGM = { timer:null, mode:null, nodes:[], nextTime:0, step:0, master:null, reverb:null, bar:0 };
+// 오리엔탈 5음계 (C 궁상각치우 + 옥타브 확장)
+const PENTA = [261.63,293.66,329.63,392.00,440.00, 523.25,587.33,659.25,784.00,880.00, 1046.50,1174.66];
+const PENTA_LOW = [130.81,146.83,164.81,196.00,220.00, 261.63,293.66];
+function noteFreq(scale, i){
+  const n=scale.length;
+  // 옥타브 래핑: 범위를 벗어나면 옥타브 단위로 조정
+  let idx=i, oct=0;
+  while(idx<0){ idx+=5; oct--; }
+  const base=scale[idx%n] || scale[n-1];
+  return base*Math.pow(2,oct);
 }
-function bgmDrum(start,gain){
+// 리버브 임펄스 생성 (홀 잔향)
+function makeReverb(ctx){
+  const len=ctx.sampleRate*2.2, buf=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(let ch=0;ch<2;ch++){ const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6); } }
+  const conv=ctx.createConvolver(); conv.buffer=buf; return conv;
+}
+// 악기음: 여러 배음 + ADSR + 약간의 비브라토 → 연주 느낌
+function bgmVoice(freq,start,dur,gain,timbre){
   const ctx=FX.audioCtx; if(!ctx) return;
-  const n=Math.floor(ctx.sampleRate*0.12), buf=ctx.createBuffer(1,n,ctx.sampleRate), d=buf.getChannelData(0);
-  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
+  const dest=BGM.master||ctx.destination;
+  const t=timbre||'pluck';
+  // 음색별 배음 구성
+  const specs={
+    // 고금/현악: 발현음, 배음 풍부, 빠른 감쇠
+    pluck:  { partials:[[1,1],[2,0.4],[3,0.22],[4,0.12],[5,0.06]], type:'triangle', atk:0.008, dec:0.9, sus:0.0, rel:0.3, vib:0 },
+    // 피리/관악: 지속음, 부드러운 어택, 비브라토
+    flute:  { partials:[[1,1],[2,0.25],[3,0.12],[4,0.05]], type:'sine', atk:0.06, dec:0.2, sus:0.6, rel:0.25, vib:5 },
+    // 현악 앙상블(패드): 느린 어택, 지속
+    strings:{ partials:[[1,1],[2,0.5],[3,0.28],[4,0.16],[6,0.08]], type:'sawtooth', atk:0.18, dec:0.3, sus:0.55, rel:0.5, vib:3 },
+    // 종/편경: 맑고 긴 여음
+    bell:   { partials:[[1,1],[2.76,0.5],[5.4,0.25],[8.2,0.1]], type:'sine', atk:0.004, dec:1.8, sus:0.0, rel:0.6, vib:0 },
+    // 저음 베이스(고쟁 저현)
+    bass:   { partials:[[1,1],[2,0.3],[3,0.1]], type:'triangle', atk:0.02, dec:0.5, sus:0.4, rel:0.3, vib:0 },
+  };
+  const sp=specs[t]||specs.pluck;
+  const env=ctx.createGain();
+  env.gain.setValueAtTime(0.0001,start);
+  env.gain.exponentialRampToValueAtTime(gain, start+sp.atk); // attack
+  const susLevel=Math.max(0.0001,gain*sp.sus);
+  env.gain.exponentialRampToValueAtTime(susLevel>0.0001?susLevel:0.0001, start+sp.atk+sp.dec); // decay→sustain
+  const relStart=start+Math.max(dur,sp.atk+sp.dec);
+  env.gain.exponentialRampToValueAtTime(0.0001, relStart+sp.rel); // release
+  // 배음별 오실레이터
+  sp.partials.forEach(([mult,amp])=>{
+    const o=ctx.createOscillator();
+    o.type=sp.type; o.frequency.value=freq*mult;
+    // 비브라토
+    if(sp.vib){ const lfo=ctx.createOscillator(), lg=ctx.createGain();
+      lfo.frequency.value=sp.vib; lg.gain.value=freq*mult*0.006;
+      lfo.connect(lg); lg.connect(o.frequency); lfo.start(start); lfo.stop(relStart+sp.rel+0.1);
+      BGM.nodes.push(lfo);
+    }
+    const pg=ctx.createGain(); pg.gain.value=amp;
+    o.connect(pg); pg.connect(env);
+    o.start(start); o.stop(relStart+sp.rel+0.1);
+    BGM.nodes.push(o);
+  });
+  // 드라이 + 리버브(웨트)
+  env.connect(dest);
+  if(BGM.reverb){ const wet=ctx.createGain(); wet.gain.value=0.35; env.connect(wet); wet.connect(BGM.reverb); }
+}
+function bgmDrum(start,gain,kind){
+  const ctx=FX.audioCtx; if(!ctx) return;
+  const dur=kind==='big'?0.28:0.14;
+  const n=Math.floor(ctx.sampleRate*dur), buf=ctx.createBuffer(1,n,ctx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,kind==='big'?2:3);
   const src=ctx.createBufferSource(); src.buffer=buf;
   const g=ctx.createGain(); g.gain.value=gain||0.15;
-  const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=200;
+  const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=kind==='big'?140:220;
   src.connect(f); f.connect(g); g.connect(BGM.master||ctx.destination); src.start(start);
+  BGM.nodes.push(src);
 }
-// 멜로디 패턴 (모드별)
+// 곡 구성: 멜로디 + 화음 + 베이스 + 드럼을 층으로. 각 모드는 코드 진행 기반.
+// mel: 멜로디 음(펜타 인덱스, -99=쉼표), chord: 각 박마다 울릴 화음(펜타 인덱스 배열), 
 const BGM_PATTERNS = {
-  field: { // 평시: 차분, 느림
-    tempo:0.42, mel:[0,2,4,2,3,4,2,0, 4,3,2,0,2,-1,0,2], bassEach:4, drumEach:0, wave:'triangle', melGain:0.08, bassGain:0.09
+  title: { // 타이틀: 장엄하고 여운 있는 도입
+    tempo:0.55, melInst:'bell', melGain:0.10, chordInst:'strings', chordGain:0.05, bassInst:'bass', bassGain:0.08,
+    mel:[  0,-99,  4,-99,  7,-99,  4,  2,   0,-99, -3,-99,  0,-99,-99,-99],
+    chords:[[0,2,4],null,null,null,[4,6,7],null,null,null,[-1,2,4],null,null,null,[0,2,4],null,null,null],
+    bassEach:4, bass:[0,4,-1,0], drumEach:0
   },
-  battle: { // 전투: 빠르고 웅장, 북소리
-    tempo:0.26, mel:[0,2,4,7,4,2,0,4, 7,9,7,4,2,4,0,-3, 4,7,9,7,4,2,0,2], bassEach:2, drumEach:2, wave:'sawtooth', melGain:0.09, bassGain:0.11
+  field: { // 평시: 차분한 고금 독주 + 현악 패드
+    tempo:0.44, melInst:'pluck', melGain:0.11, chordInst:'strings', chordGain:0.035, bassInst:'bass', bassGain:0.07,
+    mel:[  0,  2,  4,  2,   3,  4,  6,  4,   2,  0,  2, -1,   0,-99,  2,-99,
+           7,  6,  4,  2,   4,  2,  0,  2,   4,-99,  2,  0,  -1,  0,-99,-99],
+    chords:[[0,2,4],null,null,null,[2,4,6],null,null,null,[-1,2,4],null,null,null,[0,2,4],null,null,null,
+            [4,6,8],null,null,null,[2,4,6],null,null,null,[0,2,4],null,null,null,[-1,2,4],null,null,null],
+    bassEach:4, bass:[0,2,-1,0, 4,2,0,-1], drumEach:0
+  },
+  domestic: { // 내정: 밝고 경쾌한 피리
+    tempo:0.34, melInst:'flute', melGain:0.10, chordInst:'pluck', chordGain:0.04, bassInst:'bass', bassGain:0.06,
+    mel:[  4,  6,  7,  6,   4,  2,  4,-99,   6,  7,  9,  7,   6,  4,-99,-99,
+           7,  9, 11,  9,   7,  6,  4,  6,   4,  2,  4,  6,   4,-99,-99,-99],
+    chords:[[0,2,4],null,null,null,[4,6,8],null,null,null,[2,4,6],null,null,null,[4,6,8],null,null,null],
+    bassEach:2, bass:[0,4,2,6], drumEach:4
+  },
+  battle: { // 전투: 빠르고 웅장, 큰 북
+    tempo:0.24, melInst:'strings', melGain:0.10, chordInst:'strings', chordGain:0.05, bassInst:'bass', bassGain:0.11,
+    mel:[  0,  2,  4,  7,   4,  2,  0,  4,   7,  9,  7,  4,   2,  4,  0, -3,
+           4,  7,  9,  7,   4,  2,  0,  2,   7,  9, 11,  9,   7,  4,  2,  0],
+    chords:[[0,4,7],null,[2,4,7],null,[0,4,7],null,[-3,2,4],null,[4,7,9],null,[2,4,7],null,[0,4,7],null,null,null],
+    bassEach:2, bass:[0,0,4,4, 2,2,-3,0], drumEach:2, drumKind:'big'
+  },
+  tension: { // 긴박: 어둡고 불안한 저음 + 종
+    tempo:0.30, melInst:'bell', melGain:0.09, chordInst:'strings', chordGain:0.055, bassInst:'bass', bassGain:0.12,
+    mel:[ -1,-99,  0,-99,  -3,-99, -1,-99,   0,-99, -1, -3,  -1,-99,-99,-99],
+    chords:[[-1,0,2],null,null,null,[-3,-1,2],null,null,null,[-1,0,2],null,null,null,[-3,-1,0],null,null,null],
+    bassEach:2, bass:[-1,-1,-3,-3], drumEach:4, drumKind:'big'
+  },
+  victory: { // 승리: 밝고 장쾌한 팡파레
+    tempo:0.30, melInst:'bell', melGain:0.12, chordInst:'strings', chordGain:0.06, bassInst:'bass', bassGain:0.10,
+    mel:[  0,  4,  7,  9,   7,-99,  9, 11,   7,-99,  4,  7,   9,-99,-99,-99],
+    chords:[[0,4,7],null,null,null,[4,7,9],null,null,null,[2,4,7],null,null,null,[0,4,7],null,null,null],
+    bassEach:4, bass:[0,4,2,0], drumEach:2, drumKind:'big'
   },
 };
 function startBgm(mode){
@@ -2487,22 +2573,30 @@ function startBgm(mode){
   if(BGM.mode===mode && BGM.timer) return; // 이미 재생 중
   stopBgm();
   BGM.mode=mode; BGM.step=0;
-  if(!BGM.master){ BGM.master=ctx.createGain(); BGM.master.gain.value=0.6; BGM.master.connect(ctx.destination); }
-  const pat=BGM_PATTERNS[mode]||BGM_PATTERNS.field;
-  BGM.nextTime=ctx.currentTime+0.1;
+  if(!BGM.master){ BGM.master=ctx.createGain(); BGM.master.gain.value=0.55; BGM.master.connect(ctx.destination); }
+  if(!BGM.reverb){ BGM.reverb=makeReverb(ctx); const rg=ctx.createGain(); rg.gain.value=0.5; BGM.reverb.connect(rg); rg.connect(BGM.master); }
+  BGM.nextTime=ctx.currentTime+0.15;
   const schedule=()=>{
     if(!BGM.timer) return;
     const now=ctx.currentTime;
-    while(BGM.nextTime < now+0.5){
-      const s=BGM.step, t=BGM.nextTime, pat2=BGM_PATTERNS[BGM.mode]||BGM_PATTERNS.field;
-      const mi=pat2.mel[s%pat2.mel.length];
-      if(mi>-10) bgmTone(noteFreq(PENTA,mi), t, pat2.tempo*0.9, pat2.melGain, pat2.wave);
-      if(pat2.bassEach && s%pat2.bassEach===0) bgmTone(noteFreq(PENTA_LOW,mi), t, pat2.tempo*1.6, pat2.bassGain, 'triangle');
-      if(pat2.drumEach && s%pat2.drumEach===0) bgmDrum(t, 0.16);
-      BGM.step++; BGM.nextTime += pat2.tempo;
+    while(BGM.nextTime < now+0.6){
+      const s=BGM.step, t=BGM.nextTime, pat=BGM_PATTERNS[BGM.mode]||BGM_PATTERNS.field;
+      const mlen=pat.mel.length;
+      const mi=pat.mel[s%mlen];
+      // 멜로디
+      if(mi>-90) bgmVoice(noteFreq(PENTA,mi), t, pat.tempo*1.4, pat.melGain, pat.melInst);
+      // 화음 (코드)
+      if(pat.chords){ const ch=pat.chords[s%pat.chords.length];
+        if(ch){ ch.forEach(ci=> bgmVoice(noteFreq(PENTA,ci), t, pat.tempo*2.2, pat.chordGain, pat.chordInst)); } }
+      // 베이스
+      if(pat.bassEach && s%pat.bassEach===0){ const bi=pat.bass[Math.floor(s/pat.bassEach)%pat.bass.length];
+        if(bi>-90) bgmVoice(noteFreq(PENTA_LOW,bi), t, pat.tempo*3, pat.bassGain, pat.bassInst); }
+      // 드럼
+      if(pat.drumEach && s%pat.drumEach===0) bgmDrum(t, pat.drumKind==='big'?0.22:0.14, pat.drumKind);
+      BGM.step++; BGM.nextTime += pat.tempo;
     }
   };
-  BGM.timer=setInterval(schedule, 120); schedule();
+  BGM.timer=setInterval(schedule, 130); schedule();
 }
 function stopBgm(){
   if(BGM.timer){ clearInterval(BGM.timer); BGM.timer=null; }
@@ -3782,7 +3876,9 @@ function endBattle(result){
   const playerWon = playerUnits().length>0 && result!=='lose' && result!=='retreat';
   if(result==='win'){ sfx('win'); hapticPattern([60,40,60,40,120]); }
   else if(result==='lose'){ sfx('lose'); haptic(200); }
-  setBgmMode('field'); // 평시 음악 복귀
+  // 승리 시 짧게 승전 음악 → 8초 뒤 평시 복귀 / 그 외 즉시 평시
+  if(result==='win'){ startBgm('victory'); setTimeout(()=>{ if(BGM.mode==='victory') setBgmMode('field'); }, 9000); }
+  else setBgmMode('field');
   const atk=G.cities[B.atkCity], def=G.cities[B.defCity];
   const atkRemain=B.units.filter(u=>u.side==='atk').reduce((s,u)=>s+Math.max(0,u.troops),0);
   const defRemain=B.units.filter(u=>u.side==='def').reduce((s,u)=>s+Math.max(0,u.troops),0);
@@ -4568,6 +4664,7 @@ function showOpening(){
 }
 function closeOpening(){
   ensureAudio();
+  startBgm('title'); // 시작 메뉴 음악
   const op=document.getElementById('opening');
   if(op){ op.classList.add('gone'); setTimeout(()=>{ op.style.display='none'; }, 1000); }
   afterOpening();
@@ -4590,6 +4687,7 @@ function goToMainMenu(){
   closeModal(); closeBottom();
   // 게임 화면 정리 후 시작 화면 재표시
   G.selectedCity=null;
+  startBgm('title');
   afterOpening();
 }
 function showFactionOrContinue(hasSave, hasSlots){
