@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.32';
+const GAME_VERSION = 'v2.33';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1293,25 +1293,46 @@ const CHANGJIANG="M 120,415 Q 180,445 250,455 Q 320,470 385,455 Q 440,470 490,44
 function renderMap(){
   const svg = document.getElementById('mapsvg');
   let h = '';
-  // === 바다 배경 (viewBox 30 20 620 730 보다 넉넉하게) ===
+  // === 지도 배경: 방위별 지대 (바다는 동·남쪽만) ===
   h += `<defs>
-    <radialGradient id="seaGrad" cx="50%" cy="45%" r="75%">
+    <radialGradient id="seaGrad" cx="50%" cy="50%" r="70%">
       <stop offset="0%" stop-color="#16303f"/>
-      <stop offset="55%" stop-color="#112838"/>
+      <stop offset="60%" stop-color="#112838"/>
       <stop offset="100%" stop-color="#0a1a26"/>
     </radialGradient>
-    <pattern id="wavePat" width="34" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+    <linearGradient id="steppeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a3320"/>
+      <stop offset="100%" stop-color="#2e2a1a"/>
+    </linearGradient>
+    <linearGradient id="desertGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4a4028"/>
+      <stop offset="100%" stop-color="#33301e"/>
+    </linearGradient>
+    <pattern id="wavePat" width="34" height="20" patternUnits="userSpaceOnUse">
       <path d="M0 10 Q 8 4 17 10 T 34 10" fill="none" stroke="#2a5570" stroke-width="1" opacity="0.25"/>
+    </pattern>
+    <pattern id="dunePat" width="46" height="26" patternUnits="userSpaceOnUse">
+      <path d="M0 20 Q 12 12 23 20 T 46 20" fill="none" stroke="#5a4e30" stroke-width="1" opacity="0.3"/>
     </pattern>
     <filter id="coastGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="6" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>`;
-  h += `<rect x="-60" y="-80" width="800" height="960" fill="url(#seaGrad)"/>`;
-  h += `<rect x="-60" y="-80" width="800" height="960" fill="url(#wavePat)"/>`;
-  // 해안 글로우(육지 실루엣을 흐릿하게 한 번 더 → 해안선 느낌)
-  h += `<path d="${CHINA_LAND}" fill="none" stroke="#3a6a80" stroke-width="7" opacity="0.5" filter="url(#coastGlow)"/>`;
+  // 1) 전체 바탕: 북/서의 대륙 지대 (초원·사막·고원)
+  h += `<rect x="-60" y="-80" width="800" height="960" fill="url(#steppeGrad)"/>`;
+  // 2) 서쪽 고원/사막대 (좌측)
+  h += `<rect x="-60" y="-80" width="230" height="960" fill="url(#desertGrad)"/>`;
+  h += `<rect x="-60" y="-80" width="230" height="960" fill="url(#dunePat)"/>`;
+  // 3) 북쪽 초원대 (상단) — 사구 패턴 옅게
+  h += `<rect x="-60" y="-80" width="800" height="210" fill="url(#dunePat)" opacity="0.6"/>`;
+  // 4) 동·남쪽 바다: 육지의 동남 해안을 감싸는 영역만
+  //    (동쪽 x≳560, 남쪽 y≳640 바깥을 바다로. 폴리곤으로 동남 모서리를 덮음)
+  const SEA_EAST = "M 560,185 L 555,255 L 600,270 L 610,300 L 590,320 L 600,355 L 615,395 L 600,430 L 620,465 L 610,505 L 585,535 L 560,555 L 530,545 L 505,560 L 480,590 L 450,630 L 440,670 L 415,700 L 370,720 L 320,715 L 285,700 L 320,880 L 780,880 L 780,120 L 545,120 Z";
+  h += `<path d="${SEA_EAST}" fill="url(#seaGrad)"/>`;
+  h += `<path d="${SEA_EAST}" fill="url(#wavePat)"/>`;
+  // 해안 글로우(동남 해안선만 강조)
+  h += `<path d="${CHINA_LAND}" fill="none" stroke="#3a6a80" stroke-width="6" opacity="0.4" filter="url(#coastGlow)"/>`;
   // 배경 육지
   h += `<path d="${CHINA_LAND}" fill="#453c26" stroke="#7a6a44" stroke-width="2.5"/>`;
   // 강
@@ -1319,21 +1340,22 @@ function renderMap(){
   h += `<path d="${CHANGJIANG}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
   h += `<text x="150" y="200" font-size="13" fill="#6a9aba" opacity="0.7">黃河</text>`;
   h += `<text x="175" y="440" font-size="13" fill="#6a9aba" opacity="0.7">長江</text>`;
-  // 바다 라벨
-  h += `<text x="640" y="380" font-size="16" fill="#4a7a95" opacity="0.55" text-anchor="middle" font-style="italic">東海</text>`;
-  h += `<text x="400" y="800" font-size="14" fill="#4a7a95" opacity="0.5" text-anchor="middle" font-style="italic">南海</text>`;
-  h += `<text x="90" y="90" font-size="14" fill="#4a7a95" opacity="0.45" text-anchor="middle" font-style="italic">北海</text>`;
-  // 장식: 배(帆船) 몇 척
+  // 지대 라벨: 바다는 東海·南海, 북은 초원/사막, 서는 서역
+  h += `<text x="650" y="360" font-size="16" fill="#4a7a95" opacity="0.55" text-anchor="middle" font-style="italic">東海</text>`;
+  h += `<text x="420" y="800" font-size="14" fill="#4a7a95" opacity="0.5" text-anchor="middle" font-style="italic">南海</text>`;
+  h += `<text x="300" y="70" font-size="14" fill="#8a7a50" opacity="0.5" text-anchor="middle" font-style="italic">草原 (흉노·선비)</text>`;
+  h += `<text x="55" y="400" font-size="14" fill="#9a8555" opacity="0.5" text-anchor="middle" font-style="italic" transform="rotate(-90 55 400)">西域 高原</text>`;
+  // 장식: 배는 동해에만
   h += `<g opacity="0.4">
-    <path d="M655 300 l10 0 l-3 8 l-4 0 z M660 296 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
-    <path d="M120 660 l9 0 l-3 7 l-3 0 z M124 656 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
+    <path d="M665 300 l10 0 l-3 8 l-4 0 z M670 296 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
+    <path d="M640 470 l9 0 l-3 7 l-3 0 z M644 466 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
   </g>`;
-  // 나침도(compass rose) 좌상단
-  h += `<g transform="translate(80,700)" opacity="0.5">
-    <circle r="20" fill="none" stroke="#6a8aa0" stroke-width="1"/>
-    <path d="M0 -18 L4 0 L0 18 L-4 0 Z" fill="#7a9ab0"/>
-    <path d="M-18 0 L0 -4 L18 0 L0 4 Z" fill="#4a6a80"/>
-    <text x="0" y="-24" font-size="9" fill="#8aaac0" text-anchor="middle">北</text>
+  // 나침도(compass rose) 좌하단
+  h += `<g transform="translate(75,700)" opacity="0.5">
+    <circle r="20" fill="none" stroke="#8a7a55" stroke-width="1"/>
+    <path d="M0 -18 L4 0 L0 18 L-4 0 Z" fill="#a89a70"/>
+    <path d="M-18 0 L0 -4 L18 0 L0 4 Z" fill="#6a5e40"/>
+    <text x="0" y="-24" font-size="9" fill="#b8a878" text-anchor="middle">北</text>
   </g>`;
 
   // links (도로)
