@@ -401,7 +401,7 @@ const FACTIONS = [
 const SCENARIOS = {
   's190': {"name": "반동탁 연합", "year": 190, "month": 1, "desc": "190년. 동탁이 낙양을 장악하고 폭정을 일삼자 원소를 맹주로 관동 제후들이 연합했다. 가장 인기있는 표준 시나리오.", "alliance": true, "cityOwner": {}, "genMove": {}, "playable": [0, 1, 2, 4, 5, 6, 7, 9]},
   's194': {"name": "군웅할거", "year": 194, "month": 6, "desc": "194년. 동탁은 여포에게 주살되고 연합은 와해됐다. 조조는 연주를, 유비는 서주를 얻었고 손책이 강동에 거병한다. 절대강자 없는 난세.", "alliance": false, "cityOwner": {"낙양": -1, "장안": 1, "홍농": 1, "천수": 8, "무위": 8, "안정": 8, "진류": 0, "허창": 0, "초": 0, "복양": 0, "산양": 0, "하비": 10, "소패": 10, "광릉": 10, "완": 5, "수춘": 5, "남피": 2, "업": 2, "평원": 2, "북평": 7, "계": 7, "양평": 7, "장사": 4, "강하": 4, "강릉": 4, "양양": 6, "무릉": 6, "성도": 9, "강주": 9, "재동": 9, "한중": 14, "북해": 11, "제남": -1, "여남": -1}, "genMove": {"동탁": null, "화웅": null, "곽사": null, "여포": "소패", "장료": "소패", "진궁": "소패", "가후": "장안", "이각": "장안", "손책": "장사", "손견": null, "한복": null}, "factionDead": [3, 13, 12], "playable": [0, 2, 4, 5, 6, 7, 9, 10]},
-  's200': {"name": "관도대전", "year": 200, "month": 2, "desc": "200년. 조조는 헌제를 옹립하고 중원을 장악, 원소는 하북을 통일했다. 두 거인이 관도에서 천하를 두고 격돌한다.", "alliance": false, "cityOwner": {"진류": 0, "허창": 0, "초": 0, "복양": 0, "산양": 0, "낙양": 0, "홍농": 0, "여남": 0, "완": 0, "하비": 0, "소패": 0, "광릉": 0, "장안": 0, "남피": 2, "업": 2, "평원": 2, "북해": 2, "제남": 2, "진양": 2, "상당": 2, "북평": 2, "계": 2, "양평": 2, "양양": 6, "강릉": 6, "강하": 6, "무릉": 6, "장사": 6, "건업": 4, "오": 4, "회계": 4, "예장": 4, "수춘": 4, "성도": 9, "강주": 9, "재동": 9, "한중": 14, "천수": 8, "무위": 8, "안정": 8}, "genMove": {"손견": null, "손책": null, "여포": null, "화웅": null, "동탁": null, "곽사": null, "이각": null, "공손찬": null, "유비": "여남", "관우": "여남", "장비": "여남", "조운": "여남", "유언": null, "한복": null}, "factionDead": [1, 3, 7, 10, 11, 12, 13, 5], "playable": [0, 2, 6, 4, 9]},
+  's200': {"name": "관도대전", "year": 200, "month": 2, "desc": "200년. 조조는 헌제를 옹립하고 중원을 장악, 원소는 하북을 통일했다. 두 거인이 관도에서 천하를 두고 격돌한다.", "alliance": false, "cityOwner": {"진류": 0, "허창": 0, "초": 0, "복양": 0, "산양": 0, "낙양": 0, "홍농": 0, "여남": 0, "완": 0, "하비": 0, "소패": 0, "광릉": 0, "장안": 0, "남피": 2, "업": 2, "평원": 2, "북해": 2, "제남": 2, "진양": 2, "상당": 2, "북평": 2, "계": 2, "양평": 2, "양양": 6, "강릉": 6, "강하": 6, "무릉": 6, "장사": 6, "건업": 4, "오": 4, "회계": 4, "예장": 4, "수춘": 4, "성도": 9, "강주": 9, "재동": 9, "한중": 14, "천수": 8, "무위": 8, "안정": 8}, "genMove": {"손견": null, "손책": null, "여포": null, "화웅": null, "동탁": null, "곽사": null, "이각": null, "공손찬": null, "유비": "여남", "관우": "여남", "장비": "여남", "조운": "여남", "유언": null, "한복": null, "주유": "건업", "여몽": "오", "정보": "건업", "황개": "회계", "한당": "예장", "감녕": "오", "태사자": "건업", "육손": "오", "노숙": "건업", "주태": "회계", "능통": "예장", "서성": "오", "진무": "회계", "장흠": "예장", "정봉": "건업", "반장": "오", "주연": "회계", "전종": "예장", "장소": "건업", "손권": "건업"}, "factionDead": [1, 3, 7, 10, 11, 12, 13, 5], "playable": [0, 2, 6, 4, 9]},
 };
 
 const CITY_DEFS=[
@@ -761,6 +761,39 @@ function init(scenarioKey, chosenFaction){
   G.generals.forEach(g=>{
     const city=G.cities[g.cityId];
     if(city && city.owner>=0) g.faction=city.owner;
+  });
+  // === 무장 재분배: 소유 도시 중 무장 0명인 곳을 채우고, 편중 완화 ===
+  G.factions.forEach((f,fid)=>{
+    const ownedCities = G.cities.filter(c=>c.owner===fid).map(c=>c.id);
+    if(ownedCities.length<=1) return;
+    const facGens = G.generals.filter(g=>g.faction===fid);
+    if(facGens.length<2) return;
+    const countAt = cid => G.generals.filter(g=>g.cityId===cid && g.faction===fid).length;
+    // 1단계: 빈 도시 채우기
+    let emptyCities = ownedCities.filter(cid=> countAt(cid)===0);
+    for(const emptyCid of emptyCities){
+      const donorCid = ownedCities.filter(cid=>countAt(cid)>=2).sort((a,b)=>countAt(b)-countAt(a))[0];
+      if(donorCid===undefined) break;
+      const donorGens = G.generals.filter(g=>g.cityId===donorCid&&g.faction===fid)
+        .sort((a,b)=>(b.war+b.lead+b.int)-(a.war+a.lead+a.int));
+      const mover = donorGens[Math.floor(donorGens.length/2)];
+      if(mover) mover.cityId=emptyCid;
+    }
+    // 2단계: 도시 간 균등 분산 (평균 초과분을 부족 도시로)
+    const avg = Math.max(1, Math.round(facGens.length/ownedCities.length));
+    let guard=0;
+    while(guard++<80){
+      const overCid = ownedCities.filter(cid=>countAt(cid) > avg+1).sort((a,b)=>countAt(b)-countAt(a))[0];
+      if(overCid===undefined) break;
+      const underCid = ownedCities.filter(cid=>countAt(cid) < avg).sort((a,b)=>countAt(a)-countAt(b))[0];
+      if(underCid===undefined) break;
+      const donorGens = G.generals.filter(g=>g.cityId===overCid&&g.faction===fid)
+        .sort((a,b)=>(b.war+b.lead+b.int)-(a.war+a.lead+a.int));
+      // 최상위 2명(에이스)만 본거지에 남기고 나머지 분산
+      const mover = donorGens[2+Math.floor(Math.random()*Math.max(1,donorGens.length-2))];
+      if(!mover) break;
+      mover.cityId=underCid;
+    }
   });
   // 소멸 세력 처리
   if(scn.factionDead){ scn.factionDead.forEach(fid=>{ if(G.factions[fid]) G.factions[fid].alive=false; }); }
@@ -1424,10 +1457,10 @@ function openFormation(atkId, defId){
   FORM.atkCity=atkId; FORM.defCity=defId;
   const gens=G.generals.filter(g=>g.cityId===atkId && g.faction===G.playerFaction);
   // 최대 3부대. 기본 상위 3명 선택, 병력 균등 배분
-  const top=gens.slice(0,3);
+  const top=gens.slice(0,5);
   const per=Math.floor(atk.troops/Math.max(1,top.length)/100)*100;
   FORM.picks=gens.map((g,i)=>({
-    genId:g.id, sel: i<3, ttype: troopType(g).key, troops: i<3?per:0
+    genId:g.id, sel: i<5, ttype: troopType(g).key, troops: i<5?per:0
   }));
   renderFormation();
 }
@@ -1442,10 +1475,10 @@ function renderFormation(){
     <span>배정 <b style="color:${remain<0?'#f66':'#8fd'}">${used.toLocaleString()}</b></span>
     <span>잔여 <b style="color:${remain<0?'#f66':'#d4af37'}">${remain.toLocaleString()}</b></span>
   </div>
-  <div style="font-size:12px;color:#999;margin-bottom:8px">부대 선택(최대 3) · 병과 · 병력을 정하세요. 병과: 🐎기병 🛡️보병 🏹궁병</div>`;
+  <div style="font-size:12px;color:#999;margin-bottom:8px">부대 선택(최대 5) · 병과 · 병력을 정하세요. 병과: 🐎기병 🛡️보병 🏹궁병</div>`;
   gens.forEach(g=>{
     const p=FORM.picks.find(x=>x.genId===g.id);
-    const disabled = !p.sel && selCount>=3;
+    const disabled = !p.sel && selCount>=5;
     const ttBtn=(k,icon)=>{
       const gr=APT_LABEL[aptGrade(g,k)];
       const hi=aptGrade(g,k)>=3;
@@ -1470,7 +1503,7 @@ function renderFormation(){
 function togglePick(genId){
   const p=FORM.picks.find(x=>x.genId===genId);
   const selCount=FORM.picks.filter(x=>x.sel).length;
-  if(!p.sel && selCount>=3){ toast('최대 3부대까지'); return; }
+  if(!p.sel && selCount>=5){ toast("최대 5부대까지"); return; }
   p.sel=!p.sel;
   if(p.sel && p.troops===0){ p.troops=1000; }
   if(!p.sel) p.troops=0;
@@ -1505,7 +1538,7 @@ function openDefenseFormation(atkId, defId){
   }
   DFORM.atkCity=atkId; DFORM.defCity=defId;
   const per=Math.floor(def.troops/Math.min(3,defGens.length)/100)*100;
-  DFORM.picks=defGens.map((g,i)=>({ genId:g.id, sel:i<3, ttype:troopType(g).key, troops:i<3?per:0 }));
+  DFORM.picks=defGens.map((g,i)=>({ genId:g.id, sel:i<5, ttype:troopType(g).key, troops:i<5?per:0 }));
   renderDefenseFormation();
 }
 function renderDefenseFormation(){
@@ -1522,10 +1555,10 @@ function renderDefenseFormation(){
       <span>배정 <b style="color:${remain<0?'#f66':'#8fd'}">${used.toLocaleString()}</b></span>
       <span>잔여 <b style="color:${remain<0?'#f66':'#d4af37'}">${remain.toLocaleString()}</b></span>
     </div>
-    <div style="font-size:12px;color:#999;margin-bottom:8px">수비 부대 편성(최대 3) · 병과별 적성(S/A/B/C)을 확인하세요.</div>`;
+    <div style="font-size:12px;color:#999;margin-bottom:8px">수비 부대 편성(최대 5) · 병과별 적성(S/A/B/C)을 확인하세요.</div>`;
   gens.forEach(g=>{
     const p=DFORM.picks.find(x=>x.genId===g.id);
-    const disabled = !p.sel && selCount>=3;
+    const disabled = !p.sel && selCount>=5;
     const ttBtn=(k,icon)=>{
       const gr=APT_LABEL[aptGrade(g,k)]; const hi=aptGrade(g,k)>=3;
       return `<span class="ttpick ${p.ttype===k?'sel':''}" onclick="setDTT(${g.id},'${k}')">${icon}<b class="ttgrade ${hi?'g-hi':''}">${gr}</b></span>`;
@@ -1548,7 +1581,7 @@ function renderDefenseFormation(){
       fn: valid?launchDefense:()=>toast('배정 병력 확인')}]);
 }
 function toggleDPick(id){ const p=DFORM.picks.find(x=>x.genId===id); const n=DFORM.picks.filter(x=>x.sel).length;
-  if(!p.sel && n>=3){toast('최대 3부대');return;} p.sel=!p.sel; if(p.sel&&p.troops===0)p.troops=1000; if(!p.sel)p.troops=0; renderDefenseFormation(); }
+  if(!p.sel && n>=5){toast("최대 5부대");return;} p.sel=!p.sel; if(p.sel&&p.troops===0)p.troops=1000; if(!p.sel)p.troops=0; renderDefenseFormation(); }
 function setDTT(id,tt){ const p=DFORM.picks.find(x=>x.genId===id); if(p.sel){p.ttype=tt; renderDefenseFormation();} }
 function chgDTroops(id,d){ const p=DFORM.picks.find(x=>x.genId===id); if(!p.sel)return; const def=G.cities[DFORM.defCity];
   p.troops=Math.max(0,Math.min(def.troops,p.troops+d)); renderDefenseFormation(); }
