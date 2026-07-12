@@ -1,5 +1,5 @@
 // 群雄割據 삼국지 - Service Worker
-const CACHE = 'samguk-v1.2';
+const CACHE = 'samguk-v1.4';
 const ASSETS = [
   './',
   './index.html',
