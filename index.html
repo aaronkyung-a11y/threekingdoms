@@ -414,6 +414,7 @@
         <button class="tbtn" onclick="showDiplomacy()" title="외교">🕊️</button>
         <button class="tbtn" onclick="showGenCodex()" title="무장 도감">📖</button>
         <button class="tbtn" onclick="renderSaveManager()" title="세이브 관리">💾</button>
+        <button class="tbtn" onclick="confirmMainMenu()" title="메인 메뉴">🏠</button>
       </div>
     </div>
     <div class="res" id="res"></div>
@@ -455,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.30';
+const GAME_VERSION = 'v2.31';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1292,16 +1293,48 @@ const CHANGJIANG="M 120,415 Q 180,445 250,455 Q 320,470 385,455 Q 440,470 490,44
 function renderMap(){
   const svg = document.getElementById('mapsvg');
   let h = '';
+  // === 바다 배경 (viewBox 30 20 620 730 보다 넉넉하게) ===
+  h += `<defs>
+    <radialGradient id="seaGrad" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#16303f"/>
+      <stop offset="55%" stop-color="#112838"/>
+      <stop offset="100%" stop-color="#0a1a26"/>
+    </radialGradient>
+    <pattern id="wavePat" width="34" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+      <path d="M0 10 Q 8 4 17 10 T 34 10" fill="none" stroke="#2a5570" stroke-width="1" opacity="0.25"/>
+    </pattern>
+    <filter id="coastGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>`;
+  h += `<rect x="-60" y="-80" width="800" height="960" fill="url(#seaGrad)"/>`;
+  h += `<rect x="-60" y="-80" width="800" height="960" fill="url(#wavePat)"/>`;
+  // 해안 글로우(육지 실루엣을 흐릿하게 한 번 더 → 해안선 느낌)
+  h += `<path d="${CHINA_LAND}" fill="none" stroke="#3a6a80" stroke-width="7" opacity="0.5" filter="url(#coastGlow)"/>`;
   // 배경 육지
-  h += `<path d="${CHINA_LAND}" fill="#453c26" stroke="#6a5a38" stroke-width="2.5"/>`;
+  h += `<path d="${CHINA_LAND}" fill="#453c26" stroke="#7a6a44" stroke-width="2.5"/>`;
   // 강
   h += `<path d="${HUANGHE}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
   h += `<path d="${CHANGJIANG}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
   h += `<text x="150" y="200" font-size="13" fill="#6a9aba" opacity="0.7">黃河</text>`;
   h += `<text x="175" y="440" font-size="13" fill="#6a9aba" opacity="0.7">長江</text>`;
   // 바다 라벨
-  h += `<text x="605" y="380" font-size="14" fill="#4a6a8a" opacity="0.6" text-anchor="middle">東海</text>`;
-  h += `<text x="400" y="740" font-size="12" fill="#4a6a8a" opacity="0.5" text-anchor="middle">南海</text>`;
+  h += `<text x="640" y="380" font-size="16" fill="#4a7a95" opacity="0.55" text-anchor="middle" font-style="italic">東海</text>`;
+  h += `<text x="400" y="800" font-size="14" fill="#4a7a95" opacity="0.5" text-anchor="middle" font-style="italic">南海</text>`;
+  h += `<text x="90" y="90" font-size="14" fill="#4a7a95" opacity="0.45" text-anchor="middle" font-style="italic">北海</text>`;
+  // 장식: 배(帆船) 몇 척
+  h += `<g opacity="0.4">
+    <path d="M655 300 l10 0 l-3 8 l-4 0 z M660 296 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
+    <path d="M120 660 l9 0 l-3 7 l-3 0 z M124 656 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
+  </g>`;
+  // 나침도(compass rose) 좌상단
+  h += `<g transform="translate(80,700)" opacity="0.5">
+    <circle r="20" fill="none" stroke="#6a8aa0" stroke-width="1"/>
+    <path d="M0 -18 L4 0 L0 18 L-4 0 Z" fill="#7a9ab0"/>
+    <path d="M-18 0 L0 -4 L18 0 L0 4 Z" fill="#4a6a80"/>
+    <text x="0" y="-24" font-size="9" fill="#8aaac0" text-anchor="middle">北</text>
+  </g>`;
 
   // links (도로)
   const drawn = new Set();
@@ -1343,7 +1376,7 @@ function renderMap(){
 
 /* ---------- 지도 확대/축소 + 팬 ---------- */
 const VIEW = { x:30, y:20, w:620, h:730, baseW:620, baseH:730,
-  minScale:0.5, maxScale:3.0, dragging:false, dragged:false,
+  minScale:0.85, maxScale:3.0, dragging:false, dragged:false,
   lastX:0, lastY:0, pinchDist:0 };
 function applyViewBox(){
   const svg=document.getElementById('mapsvg');
@@ -4354,10 +4387,16 @@ function slotLoad(slotKey){
   const slots=readSlots();
   const s=slots[slotKey];
   if(!s||!s.data){ toast('세이브가 없습니다'); return; }
-  applySaveData(s.data);
-  closeModal(); closeBottom(); renderAll();
-  toast('불러오기 완료 ('+G.year+'년 '+G.month+'월)');
-  log('세이브를 불러왔습니다.', true);
+  const m=s.meta||{};
+  showModal('불러오기 확인',
+    `<div style="line-height:1.7"><b style="color:var(--gold)">${s.name||'세이브'}</b><br>${m.year||'?'}년 ${m.month||'?'}월 · ${factionLabel(m.faction)}<br><br>이 세이브를 불러올까요? 현재 진행 중인 게임은 사라집니다.</div>`,
+    [{label:'취소',cls:'',fn:renderSaveManager},
+     {label:'불러오기',cls:'primary',fn:()=>{
+        applySaveData(s.data);
+        closeModal(); closeBottom(); renderAll();
+        toast('불러오기 완료 ('+G.year+'년 '+G.month+'월)');
+        log('세이브를 불러왔습니다.', true);
+     }}]);
 }
 
 function doSave(){
@@ -4535,13 +4574,29 @@ function closeOpening(){
 }
 function afterOpening(){
   const hasSave=!!localStorage.getItem(SAVE_KEY);
-  if(hasSave){ showFactionOrContinue(); }
+  const hasSlots=Object.keys(readSlots()).length>0;
+  if(hasSave||hasSlots){ showFactionOrContinue(hasSave,hasSlots); }
   else { showScenarioSelect(); }
 }
-function showFactionOrContinue(){
-  showModal('群雄割據', `<div style="line-height:1.7">저장된 게임이 있습니다.<br>이어서 하거나 새 시나리오를 시작할 수 있습니다.</div>`,
-    [{label:'새 게임',cls:'',fn:()=>{ closeModal(); showScenarioSelect(); }},
-     {label:'이어하기',cls:'primary',fn:()=>{ closeModal(); startFresh(); doLoadDirect(); }}]);
+// 게임 중 → 메인 메뉴로 (확인 창)
+function confirmMainMenu(){
+  showModal('메인 메뉴로',
+    `<div style="line-height:1.7">메인 메뉴(시작 화면)로 돌아갈까요?<br><span style="font-size:12px;color:#c98a4a">진행 중인 상황은 자동 저장돼 '이어하기'로 복구할 수 있지만, 확실히 하려면 먼저 💾로 세이브하세요.</span></div>`,
+    [{label:'취소',cls:'',fn:closeModal},
+     {label:'💾 저장하고 나가기',cls:'',fn:()=>{ closeModal(); renderSaveManager(); }},
+     {label:'메인으로',cls:'primary',fn:()=>{ autoSave(); goToMainMenu(); }}]);
+}
+function goToMainMenu(){
+  closeModal(); closeBottom();
+  // 게임 화면 정리 후 시작 화면 재표시
+  G.selectedCity=null;
+  afterOpening();
+}
+function showFactionOrContinue(hasSave, hasSlots){
+  const btns=[{label:'새 게임',cls:'',fn:()=>{ closeModal(); showScenarioSelect(); }}];
+  if(hasSlots){ btns.push({label:'💾 로드하기',cls: hasSave?'':'primary',fn:()=>{ closeModal(); renderSaveManager(); }}); }
+  if(hasSave){ btns.push({label:'▶ 이어하기',cls:'primary',fn:()=>{ closeModal(); startFresh(); doLoadDirect(); }}); }
+  showModal('群雄割據', `<div style="line-height:1.7">저장된 게임이 있습니다.<br>이어서 하거나, 저장된 세이브를 불러오거나, 새 시나리오를 시작할 수 있습니다.</div>`, btns);
 }
 // 시나리오 선택 화면
 function showScenarioSelect(){
