@@ -220,6 +220,44 @@
     background:linear-gradient(90deg,transparent, #fff, transparent); border-radius:4px; }
   .slash.go{ animation:slashAnim .3s ease-out forwards; }
   @keyframes slashAnim{ 0%{opacity:0;transform:translate(-50%,-50%) rotate(-35deg) scaleX(.2)} 40%{opacity:1} 100%{opacity:0;transform:translate(-50%,-50%) rotate(-35deg) scaleX(1.3)} }
+
+  /* 일기토 스테이지 */
+  #duelStage{ position:absolute; inset:0; z-index:40; display:none; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at center, #2a1810 0%, #0a0604 80%); }
+  #duelStage.show{ display:flex; animation:duelIn .3s ease-out; }
+  @keyframes duelIn{ from{opacity:0} to{opacity:1} }
+  .duel-vs-label{ font-size:34px; font-weight:bold; color:#d4af37; letter-spacing:6px;
+    text-shadow:0 2px 12px #000, 0 0 20px #d4af3760; margin-bottom:4px; }
+  .duel-rel{ font-size:14px; color:#f88; margin-bottom:10px; font-weight:bold; }
+  .duel-arena{ display:flex; align-items:center; justify-content:center; gap:8px; position:relative; width:100%; }
+  .duel-fighter{ display:flex; flex-direction:column; align-items:center; gap:4px; width:130px; }
+  .duel-fighter svg{ filter:drop-shadow(0 4px 12px #000); border-radius:8px; }
+  .duel-fighter.fL{ transform:translateX(0); }
+  .duel-fighter.fR{ transform:translateX(0) scaleX(-1); }
+  .duel-fighter.fR .duel-name, .duel-fighter.fR .duel-hp{ transform:scaleX(-1); }
+  .duel-fighter.fL.lunge{ animation:lungeR .42s ease-in; }
+  .duel-fighter.fR.lunge{ animation:lungeL .42s ease-in; }
+  @keyframes lungeR{ 0%{transform:translateX(0)} 100%{transform:translateX(38px)} }
+  @keyframes lungeL{ 0%{transform:translateX(0) scaleX(-1)} 100%{transform:translateX(-38px) scaleX(-1)} }
+  .duel-fighter.hurt{ animation:hurtShake .3s; }
+  @keyframes hurtShake{ 0%,100%{filter:none} 25%{filter:brightness(1.8) sepia(1) hue-rotate(-30deg)} 50%{transform:translateX(6px)} }
+  .duel-fighter.victor{ animation:victorPose .5s ease-out forwards; }
+  @keyframes victorPose{ to{transform:scale(1.12)} }
+  .duel-fighter.fR.victor{ animation:victorPoseR .5s ease-out forwards; }
+  @keyframes victorPoseR{ to{transform:scale(1.12) scaleX(-1)} }
+  .duel-fighter.defeated{ animation:defeatPose .6s ease-out forwards; }
+  @keyframes defeatPose{ to{opacity:0.35; transform:translateY(14px) rotate(-8deg)} }
+  .duel-fighter.fR.defeated{ animation:defeatPoseR .6s ease-out forwards; }
+  @keyframes defeatPoseR{ to{opacity:0.35; transform:translateY(14px) rotate(8deg) scaleX(-1)} }
+  .duel-name{ font-size:15px; font-weight:bold; text-shadow:0 1px 4px #000; }
+  .duel-hp{ width:90px; height:6px; background:#3a2a1a; border-radius:3px; overflow:hidden; }
+  .duel-hp i{ display:block; height:100%; width:100%; background:linear-gradient(90deg,#5cd65c,#8fd); transition:width .3s; }
+  .duel-clash{ font-size:40px; color:#fff; opacity:0; text-shadow:0 0 20px #ffd234; z-index:5; }
+  .duel-clash.boom{ animation:clashBoom .5s ease-out; }
+  @keyframes clashBoom{ 0%{opacity:0;transform:scale(.3) rotate(-20deg)} 30%{opacity:1;transform:scale(1.8) rotate(10deg)} 100%{opacity:0;transform:scale(1.2)} }
+  .duel-round{ margin-top:20px; font-size:20px; font-weight:bold; color:#d4af37; min-height:26px; text-shadow:0 1px 6px #000; }
+  .duel-skip{ position:absolute; bottom:24px; font-size:13px; color:#a89878; opacity:0.7; }
   /* 오디오 토글 */
   #bhead .bfx{ margin-left:auto; display:flex; gap:6px; }
   #bhead .bfx button{ background:var(--panel2); border:1px solid var(--gold); color:var(--gold);
@@ -277,6 +315,7 @@
     <span class="bfx"><button id="fxToggle" onclick="toggleFX()">🔊</button></span></div>
   <div id="bmapwrap"><svg id="bsvg" viewBox="0 0 765 645" preserveAspectRatio="xMidYMid meet"></svg><div id="impactFlash"></div><div id="focusLines"></div></div>
   <div id="bbottom"><div id="binfo">부대를 선택하세요.</div><div id="bcmd"></div></div>
+  <div id="duelStage"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -847,6 +886,114 @@ function personaOf(gen){ return (gen && gen.persona) || 'plain'; }
 function personaLabel(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.label:'평범'; }
 function personaColor(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.color:'#a09070'; }
 function personaTrait(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.trait:''; }
+
+/* ---------- 무장 초상화 (절차적 SVG) ---------- */
+// 결정론적 해시 (같은 이름 = 같은 얼굴)
+function strHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h>>>0; }
+// 세력 색 → 갑옷 색
+function factionArmorColor(gen){
+  const f = (gen && gen.faction!=null && G.factions[gen.faction]) ? G.factions[gen.faction] : null;
+  return f ? f.color : '#6a5a3a';
+}
+const SKIN_TONES=['#e8c3a0','#e0b48c','#d4a074','#c99060','#e6c8a8'];
+const PORTRAIT_CACHE={};
+// 무장 특징 산출
+function portraitFeatures(gen){
+  const h=strHash(gen.name);
+  const arch=personaOf(gen);
+  const skin=SKIN_TONES[h%SKIN_TONES.length];
+  const armor=factionArmorColor(gen);
+  // 수염: 무력·나이 느낌 (지장은 긴 수염 확률↑, 호걸은 덥수룩)
+  const beardType = arch==='wise' ? (h>>3&1?'long':'goatee')
+                  : arch==='brave'||arch==='loyal' ? (h>>3&1?'full':'stubble')
+                  : (h>>3&3)===0?'goatee':'none';
+  // 투구: 무력 높으면 무관 투구, 지력 높으면 문관 두건
+  const helmet = gen.war>=gen.int ? (gen.war>=85?'warlord':'soldier') : (gen.int>=80?'scholar':'cap');
+  // 눈매: 성격별
+  const eyes = arch==='brave'?'fierce' : arch==='cold'?'sharp' : arch==='wise'?'calm' : arch==='ambitious'?'narrow' : 'normal';
+  // 얼굴형
+  const face = ['round','oval','square','long'][h%4];
+  // 눈썹 색/머리색
+  const hairDark = (h>>5&3)!==0; // 대부분 검은머리, 가끔 희끗
+  const hair = hairDark? '#2a2018' : '#8a8078';
+  return {skin,armor,beardType,helmet,eyes,face,hair, accent: personaColor(gen)};
+}
+// SVG 초상화 생성 (size px)
+function genPortraitSVG(gen, size){
+  if(!gen) return '';
+  const f=portraitFeatures(gen);
+  const s=size||120;
+  // 얼굴형 path
+  const faceShape = {
+    round: `<ellipse cx="60" cy="66" rx="30" ry="33"/>`,
+    oval:  `<ellipse cx="60" cy="66" rx="27" ry="35"/>`,
+    square:`<rect x="32" y="36" width="56" height="62" rx="20"/>`,
+    long:  `<ellipse cx="60" cy="68" rx="26" ry="38"/>`,
+  }[f.face];
+  // 눈
+  const eyeShapes={
+    fierce:`<path d="M42 60 L52 57 L52 62 Z" fill="#2a1a10"/><path d="M78 60 L68 57 L68 62 Z" fill="#2a1a10"/>`,
+    sharp: `<line x1="42" y1="59" x2="53" y2="60" stroke="#2a1a10" stroke-width="3"/><line x1="78" y1="59" x2="67" y2="60" stroke="#2a1a10" stroke-width="3"/>`,
+    calm:  `<ellipse cx="48" cy="60" rx="4" ry="2.5" fill="#2a1a10"/><ellipse cx="72" cy="60" rx="4" ry="2.5" fill="#2a1a10"/>`,
+    narrow:`<line x1="43" y1="60" x2="53" y2="59" stroke="#2a1a10" stroke-width="2.5"/><line x1="77" y1="60" x2="67" y2="59" stroke="#2a1a10" stroke-width="2.5"/>`,
+    normal:`<circle cx="48" cy="60" r="3" fill="#2a1a10"/><circle cx="72" cy="60" r="3" fill="#2a1a10"/>`,
+  };
+  const eyes=eyeShapes[f.eyes]||eyeShapes.normal;
+  // 눈썹
+  const brows = f.eyes==='fierce'
+    ? `<path d="M40 52 L54 55" stroke="${f.hair}" stroke-width="3.5" fill="none"/><path d="M80 52 L66 55" stroke="${f.hair}" stroke-width="3.5" fill="none"/>`
+    : `<path d="M42 53 Q48 50 54 53" stroke="${f.hair}" stroke-width="3" fill="none"/><path d="M78 53 Q72 50 66 53" stroke="${f.hair}" stroke-width="3" fill="none"/>`;
+  // 수염
+  const beards={
+    full: `<path d="M38 74 Q60 108 82 74 Q80 92 60 96 Q40 92 38 74Z" fill="${f.hair}" opacity="0.9"/>`,
+    long: `<path d="M44 76 Q60 130 76 76 Q72 100 60 100 Q48 100 44 76Z" fill="${f.hair}" opacity="0.9"/>`,
+    goatee:`<path d="M52 82 Q60 100 68 82 Q64 92 60 92 Q56 92 52 82Z" fill="${f.hair}" opacity="0.9"/>`,
+    stubble:`<ellipse cx="60" cy="82" rx="20" ry="12" fill="${f.hair}" opacity="0.25"/>`,
+    none:'',
+  };
+  const beard=beards[f.beardType]||'';
+  // 투구/두건
+  const helmets={
+    warlord:`<path d="M28 44 Q60 10 92 44 L88 50 Q60 26 32 50Z" fill="${f.armor}" stroke="#00000040" stroke-width="1"/>
+             <rect x="55" y="12" width="10" height="16" rx="3" fill="#d4af37"/><circle cx="60" cy="12" r="4" fill="#e0603a"/>`,
+    soldier:`<path d="M30 46 Q60 16 90 46 L86 52 Q60 30 34 52Z" fill="${f.armor}" stroke="#00000040" stroke-width="1"/>
+             <rect x="57" y="18" width="6" height="12" rx="2" fill="#d4af37"/>`,
+    scholar:`<path d="M30 46 Q60 22 90 46 Q88 34 60 30 Q32 34 30 46Z" fill="#2a2a3a"/><rect x="54" y="26" width="12" height="8" rx="2" fill="#3a3a4a"/>`,
+    cap:`<path d="M32 48 Q60 28 88 48 Q86 38 60 36 Q34 38 32 48Z" fill="#4a3a28"/>`,
+  };
+  const helmet=helmets[f.helmet]||helmets.cap;
+  // 갑옷 어깨
+  const armor=`<path d="M20 118 Q30 96 44 92 L44 100 Q60 108 76 100 L76 92 Q90 96 100 118 Z" fill="${f.armor}" stroke="#00000030" stroke-width="1"/>
+               <path d="M52 92 Q60 104 68 92 L68 118 L52 118Z" fill="${f.skin}"/>`;
+  // 입
+  const mouth = personaOf(gen)==='brave'
+    ? `<path d="M52 74 Q60 79 68 74" stroke="#7a3020" stroke-width="2.5" fill="none"/>`
+    : `<line x1="53" y1="75" x2="67" y2="75" stroke="#7a3020" stroke-width="2"/>`;
+  return `<svg viewBox="0 0 120 130" width="${s}" height="${s*130/120}" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="pc${gen.id}"><rect x="0" y="0" width="120" height="130" rx="8"/></clipPath></defs>
+    <g clip-path="url(#pc${gen.id})">
+      <rect x="0" y="0" width="120" height="130" fill="#1a1510"/>
+      <rect x="0" y="0" width="120" height="130" fill="url(#pgrad${gen.id})"/>
+      <defs><radialGradient id="pgrad${gen.id}" cx="50%" cy="35%"><stop offset="0%" stop-color="${f.accent}" stop-opacity="0.18"/><stop offset="100%" stop-color="#1a1510" stop-opacity="0"/></radialGradient></defs>
+      ${armor}
+      <g fill="${f.skin}" stroke="#00000020" stroke-width="1">${faceShape}</g>
+      <ellipse cx="34" cy="68" rx="5" ry="7" fill="${f.skin}"/><ellipse cx="86" cy="68" rx="5" ry="7" fill="${f.skin}"/>
+      ${beard}
+      ${brows}${eyes}
+      <path d="M60 62 L57 70 L63 70Z" fill="${f.skin}" stroke="#00000015" stroke-width="0.5"/>
+      ${mouth}
+      ${helmet}
+    </g>
+    <rect x="1" y="1" width="118" height="128" rx="8" fill="none" stroke="${f.accent}" stroke-width="2" opacity="0.6"/>
+  </svg>`;
+}
+// 초상화 반환 (AI 이미지 우선, 없으면 SVG)
+function genPortrait(gen, size){
+  if(gen && gen.portraitUrl){ // 나중에 AI 이미지로 교체 시
+    return `<img src="${gen.portraitUrl}" width="${size}" height="${size}" style="border-radius:8px;object-fit:cover">`;
+  }
+  return genPortraitSVG(gen, size);
+}
 // 상황별 대사 한 줄
 function genLine(gen, situation){
   if(!gen || !gen.name) return '';
@@ -895,12 +1042,17 @@ function showGenInfo(genId){
   const cry=genLine(g,'battle');
   const cityName = g.cityId>=0 && G.cities[g.cityId] ? G.cities[g.cityId].name : '재야';
   const body=`<div style="line-height:1.7">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <b style="font-size:20px;color:var(--gold)">${g.name}</b>
-      <span class="pbadge" style="background:${arch.color}">${arch.label}</span>
-      <span style="color:#999;font-size:12px;margin-left:auto">${cityName}</span>
+    <div style="display:flex;gap:12px;margin-bottom:10px">
+      <div style="flex-shrink:0">${genPortrait(g,84)}</div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <b style="font-size:20px;color:var(--gold)">${g.name}</b>
+          <span class="pbadge" style="background:${arch.color}">${arch.label}</span>
+        </div>
+        <div style="color:#999;font-size:12px;margin-top:2px">${cityName}</div>
+        <div style="color:#dca;font-style:italic;margin-top:6px;font-size:13px">"${cry}"</div>
+      </div>
     </div>
-    <div style="color:#dca;font-style:italic;margin-bottom:8px">"${cry}"</div>
     <div style="background:var(--panel2);border-radius:6px;padding:8px;margin-bottom:8px">
       <div style="color:#b8a878;font-size:13px">무력 <b style="color:var(--gold)">${g.war}</b> · 통솔 <b style="color:var(--gold)">${g.lead}</b> · 지력 <b style="color:var(--gold)">${g.int}</b> · 정치 <b style="color:var(--gold)">${g.pol}</b></div>
       <div style="color:#b8a878;font-size:13px;margin-top:4px">병과: ${aptRow}</div>
@@ -1723,7 +1875,7 @@ function maybeDuelThenAttack(atkU, defU){
 }
 
 function doDuel(atkU, defU){
-  sfx('duel'); hapticPattern([40,60,40,60,80]); focusLinesFx();
+  sfx('duel'); hapticPattern([40,60,40,60,80]);
   // 숙적/라이벌 관계 → 호걸은 투지, 판정 보정
   const rel = relationBetween(atkU.name, defU.name);
   let aBonus=1.0, dBonus=1.0;
@@ -1732,38 +1884,106 @@ function doDuel(atkU, defU){
     if(personaOf(defU.gen)==='brave') dBonus=1.12;
   }
   // 무력 + 사기 + 무작위. 라운드 3회 판정
-  let aScore=0, dScore=0, rounds=[];
+  let aScore=0, dScore=0, rounds=[], roundWin=[];
   for(let i=0;i<3;i++){
     const a=atkU.war*aBonus*(0.7+atkU.morale/300)+Math.random()*40;
     const d=defU.war*dBonus*(0.7+defU.morale/300)+Math.random()*40;
-    if(a>=d){ aScore++; rounds.push(`${i+1}합: ${atkU.name} 우세`); }
-    else { dScore++; rounds.push(`${i+1}합: ${defU.name} 우세`); }
+    if(a>=d){ aScore++; rounds.push(`${i+1}합: ${atkU.name} 우세`); roundWin.push('a'); }
+    else { dScore++; rounds.push(`${i+1}합: ${defU.name} 우세`); roundWin.push('d'); }
   }
   const win = aScore>dScore;
   B.duelDone=true;
-  let result='';
-  if(win){
-    const loss=Math.min(defU.troops, Math.floor(defU.troops*0.25+300));
-    defU.troops-=loss; defU.morale=Math.max(0,defU.morale-35);
-    atkU.morale=Math.min(120,atkU.morale+10);
-    const cry=genLine(atkU.gen,'win');
-    result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
-    shake('l'); sfx('crit'); haptic(120); impactFlash(); slashFx(defU.col,defU.row); popDamage(defU.col,defU.row,'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,14,'#d44');
-  } else {
-    const loss=Math.min(atkU.troops, Math.floor(atkU.troops*0.18+200));
-    atkU.troops-=loss; atkU.morale=Math.max(0,atkU.morale-25);
-    defU.morale=Math.min(120,defU.morale+10);
-    const cry=genLine(defU.gen,'win');
-    result=`<span style="color:#f99">${defU.name} 승리...</span> 아군 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
-    shake('l'); sfx('crit'); haptic(150); impactFlash('red'); slashFx(atkU.col,atkU.row); popDamage(atkU.col,atkU.row,'一騎討 敗','counter'); hitFlash(atkU.col,atkU.row); spawnParticles(atkU.col,atkU.row,14,'#4a8ad4');
+  // 애니메이션 재생 후 결과 처리
+  playDuelAnimation(atkU, defU, roundWin, win, rel, ()=>{
+    let result='';
+    if(win){
+      const loss=Math.min(defU.troops, Math.floor(defU.troops*0.25+300));
+      defU.troops-=loss; defU.morale=Math.max(0,defU.morale-35);
+      atkU.morale=Math.min(120,atkU.morale+10);
+      const cry=genLine(atkU.gen,'win');
+      result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
+      shake('l'); sfx('crit'); haptic(120); impactFlash(); slashFx(defU.col,defU.row); popDamage(defU.col,defU.row,'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,14,'#d44');
+    } else {
+      const loss=Math.min(atkU.troops, Math.floor(atkU.troops*0.18+200));
+      atkU.troops-=loss; atkU.morale=Math.max(0,atkU.morale-25);
+      defU.morale=Math.min(120,defU.morale+10);
+      const cry=genLine(defU.gen,'win');
+      result=`<span style="color:#f99">${defU.name} 승리...</span> 아군 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
+      shake('l'); sfx('crit'); haptic(150); impactFlash('red'); slashFx(atkU.col,atkU.row); popDamage(atkU.col,atkU.row,'一騎討 敗','counter'); hitFlash(atkU.col,atkU.row); spawnParticles(atkU.col,atkU.row,14,'#4a8ad4');
+    }
+    renderBattle();
+    showModal('⚔️ 일기토 결과',
+      `<div style="line-height:1.8">${rounds.join('<br>')}<br><br><b>${result}</b></div>`,
+      [{label:'이어서 교전',cls:'primary',fn:()=>{ closeModal();
+          if(atkU.troops>0 && defU.troops>0){ doAttack(atkU,defU); }
+          else { atkU.acted=true; atkU.moved=true; B.sel=null; renderBattle(); checkBattleEnd(); checkPhaseEnd(); renderBattleCmd(); }
+       }}]);
+  });
+}
+
+/* ---------- 일기토 애니메이션 ---------- */
+function playDuelAnimation(atkU, defU, roundWin, finalWin, rel, done){
+  const ov=document.getElementById('duelStage');
+  const aColor=personaColor(atkU.gen), dColor=personaColor(defU.gen);
+  const relTag = rel ? `<div class="duel-rel">${rel.type==='foe'?'⚔ 숙적':rel.type==='rival'?'🔥 라이벌':REL_LABEL[rel.type]}</div>` : '';
+  ov.innerHTML = `
+    <div class="duel-vs-label">一騎討</div>
+    ${relTag}
+    <div class="duel-arena">
+      <div class="duel-fighter fL" id="duelL">
+        ${genPortraitSVG(atkU.gen,110)}
+        <div class="duel-name" style="color:${aColor}">${atkU.name}</div>
+        <div class="duel-hp" id="duelHpL"><i></i></div>
+      </div>
+      <div class="duel-clash" id="duelClash">⚔</div>
+      <div class="duel-fighter fR" id="duelR">
+        ${genPortraitSVG(defU.gen,110)}
+        <div class="duel-name" style="color:${dColor}">${defU.name}</div>
+        <div class="duel-hp" id="duelHpR"><i></i></div>
+      </div>
+    </div>
+    <div class="duel-round" id="duelRound"></div>
+    <div class="duel-skip" onclick="window.__duelSkip&&window.__duelSkip()">탭하여 건너뛰기 ▶</div>
+  `;
+  ov.classList.add('show');
+  const L=ov.querySelector('#duelL'), R=ov.querySelector('#duelR');
+  const clash=ov.querySelector('#duelClash'), roundEl=ov.querySelector('#duelRound');
+  const hpL=ov.querySelector('#duelHpL i'), hpR=ov.querySelector('#duelHpR i');
+  let aHP=100, dHP=100;
+  let i=0, cancelled=false;
+  const timers=[];
+  function cleanup(){ timers.forEach(clearTimeout); ov.classList.remove('show'); ov.innerHTML=''; window.__duelSkip=null; }
+  window.__duelSkip=()=>{ if(cancelled) return; cancelled=true; cleanup(); done&&done(); };
+  function clashStep(){
+    if(cancelled) return;
+    if(i>=roundWin.length){
+      // 결착 포즈
+      roundEl.textContent = finalWin? `${atkU.name} 승!` : `${defU.name} 승!`;
+      const winnerEl = finalWin? L : R, loserEl = finalWin? R : L;
+      winnerEl.classList.add('victor'); loserEl.classList.add('defeated');
+      sfx(finalWin?'win':'lose');
+      timers.push(setTimeout(()=>{ if(!cancelled){ cleanup(); done&&done(); } }, 900));
+      return;
+    }
+    const w=roundWin[i];
+    // 돌진
+    L.classList.add('lunge'); R.classList.add('lunge');
+    timers.push(setTimeout(()=>{
+      if(cancelled) return;
+      // 충돌
+      clash.classList.add('boom'); sfx('crit'); shake('m'); haptic(60);
+      if(w==='a'){ dHP=Math.max(0,dHP-34); hpR.style.width=dHP+'%'; R.classList.add('hurt'); }
+      else { aHP=Math.max(0,aHP-34); hpL.style.width=aHP+'%'; L.classList.add('hurt'); }
+      roundEl.textContent = `${i+1}합 — ${w==='a'?atkU.name:defU.name} 우세!`;
+      roundEl.style.color = w==='a'?personaColor(atkU.gen):personaColor(defU.gen);
+      timers.push(setTimeout(()=>{
+        if(cancelled) return;
+        L.classList.remove('lunge','hurt'); R.classList.remove('lunge','hurt'); clash.classList.remove('boom');
+        i++; clashStep();
+      }, 520));
+    }, 420));
   }
-  renderBattle();
-  showModal('⚔️ 일기토 결과',
-    `<div style="line-height:1.8">${rounds.join('<br>')}<br><br><b>${result}</b></div>`,
-    [{label:'이어서 교전',cls:'primary',fn:()=>{ closeModal();
-        if(atkU.troops>0 && defU.troops>0){ doAttack(atkU,defU); }
-        else { atkU.acted=true; atkU.moved=true; B.sel=null; renderBattle(); checkBattleEnd(); checkPhaseEnd(); renderBattleCmd(); }
-     }}]);
+  timers.push(setTimeout(clashStep, 650)); // 등장 후 시작
 }
 
 function doAttack(atkU, defU){
