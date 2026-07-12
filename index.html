@@ -113,6 +113,11 @@
   .apt-cell.apt-hi{ color:#ffd97a; border-color:#7a6530; }
   .apt-cell.apt-best{ background:#3a2f1c; color:#ffd700; border-color:var(--gold); font-weight:bold; }
   .gen-row .gstat{ color:var(--ink2); font-size:12px; margin-left:auto; }
+  .sort-bar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:6px 4px 8px; font-size:12px; color:var(--ink2); }
+  .sort-btn{ padding:3px 9px; border:1px solid #4a3d28; border-radius:12px; color:var(--ink2); cursor:pointer; background:var(--panel2); }
+  .sort-btn.sort-on{ background:var(--gold); color:#000; border-color:var(--gold); font-weight:bold; }
+  .gstat .stat-hl{ color:var(--gold); }
+  .synergy-note{ margin-top:6px; padding:6px 10px; background:rgba(232,200,116,0.1); border:1px solid #4a3d28; border-radius:6px; font-size:12px; color:#d8c088; }
   .tt-badge{ font-size:12px; padding:2px 7px; border-radius:10px; font-weight:bold; }
   .tt-cav{ background:#5a2d2d; color:#ffb3b3; }
   .tt-inf{ background:#2d4a5a; color:#b3d9ff; }
@@ -428,7 +433,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.21';
+const GAME_VERSION = 'v2.22';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1417,19 +1422,29 @@ function selectCity(id){
   const bottom = document.getElementById('bottom');
   bottom.classList.remove('hidden');
 
-  // 무장 리스트 (병과 적성 + 성격)
-  let genHtml = gens.length? gens.map(g=>{
+  // 무장 리스트 (병과 적성 + 성격) — 정렬 지원
+  const sortKey = G.genSortKey || 'default';
+  const sortLabel = {default:'기본', war:'무력', lead:'통솔', int:'지력', pol:'정치'};
+  let sortedGens = gens.slice();
+  if(sortKey!=='default') sortedGens.sort((a,b)=>b[sortKey]-a[sortKey]);
+  const sortBtns = ['default','war','lead','int','pol'].map(k=>
+    `<span class="sort-btn ${sortKey===k?'sort-on':''}" onclick="setGenSort('${k}')">${sortLabel[k]}</span>`
+  ).join('');
+  let genHtml = sortedGens.length? sortedGens.map(g=>{
     const best=bestAptType(g);
     const aptCell=(k,label)=>{
       const gr=aptGrade(g,k), lbl=APT_LABEL[gr];
       const hi = gr>=3; const isBest = k===best;
       return `<span class="apt-cell ${hi?'apt-hi':''} ${isBest?'apt-best':''}">${label}${lbl}</span>`;
     };
+    // 정렬 기준 능력치를 강조 표시
+    const stat=(k,lb,v)=>`<b class="${sortKey===k?'stat-hl':''}">${lb}${v}</b>`;
     return `<div class="gen-row">
       <span class="gname" onclick="showGenInfo(${g.id})" style="cursor:pointer">${g.name}<span class="pbadge" style="background:${personaColor(g)}">${personaLabel(g)}</span></span>
       <span class="apt-group">${aptCell('cav','🐎')}${aptCell('inf','🛡️')}${aptCell('arc','🏹')}</span>
-      <span class="gstat">무${g.war}·통${g.lead}·지${g.int}</span></div>`;
+      <span class="gstat">${stat('war','무',g.war)}·${stat('lead','통',g.lead)}·${stat('int','지',g.int)}·${stat('pol','정',g.pol)}</span></div>`;
   }).join('') : '<div class="gen-row" style="color:#888">주둔 무장 없음</div>';
+  const sortBar = gens.length>1 ? `<div class="sort-bar">정렬 ${sortBtns}</div>` : '';
 
   // 재야 무장 (이 도시에 거주하는 무소속 인재)
   const freeGens = G.generals.filter(g=>g.cityId===id && g.faction===-1 && !g.dead);
@@ -1450,9 +1465,11 @@ function selectCity(id){
   if(isPlayer){
     const dis = acted ? 'disabled' : '';
     // 예상 효과 계산
-    const devEff = 20 + Math.floor(bestPol(c.id)*0.3);
-    const orderEff = 8+Math.floor(bestPol(c.id)*0.1);
+    const devEff = 20 + Math.floor(civilPower(c.id)*0.3);
+    const orderEff = 8+Math.floor(civilPower(c.id)*0.1);
     const conscript = Math.min(Math.floor(c.pop*0.05),3000);
+    const assistN = civilAssistCount(c.id);
+    const synergyNote = assistN>0 ? `<div class="synergy-note">👥 보조 무장 ${assistN}명이 내정 효율에 기여 중 (유효 정치력 ${civilPower(c.id)})</div>` : '';
     const gs=G.generals.filter(g=>g.cityId===c.id);
     const lead=gs.length?Math.max(...gs.map(g=>g.lead)):40;
     const trainEff=8+Math.floor(lead*0.15);
@@ -1465,7 +1482,7 @@ function selectCity(id){
       <div class="cmd-btn ${c.gold<200?'disabled':dis}" onclick="cmdConscript()">⚔️징병${subC(conscript,200)}</div>
       <div class="cmd-btn ${c.gold<80?'disabled':dis}" onclick="cmdTrain()">🏋️훈련${sub(trainEff,80)}</div>
       <div class="cmd-btn" onclick="cmdAttack()">🔥출병·공격</div>
-    </div>${acted?'<div class="acted-note">이번 달 내정 명령을 사용했습니다 (출병은 가능)</div>':''}`;
+    </div>${synergyNote}${acted?'<div class="acted-note">이번 달 내정 명령을 사용했습니다 (출병은 가능)</div>':''}`;
   }
 
   bottom.innerHTML = `
@@ -1487,10 +1504,12 @@ function selectCity(id){
         <span>무장 ${gens.length}명 · 인구 ${c.pop.toLocaleString()} · 농${c.agri}/상${c.comm}</span>
         <span class="gen-toggle">${genExpanded?'▲ 접기':'▼ 상세'}</span>
       </div>
+      ${genExpanded?sortBar:''}
       <div class="generals ${genExpanded?'':'collapsed'}">${genHtml}${freeHtml}</div>
     </div>`;
 }
 function toggleGens(){ genExpanded=!genExpanded; if(G.selectedCity!=null) selectCity(G.selectedCity); }
+function setGenSort(k){ G.genSortKey = (G.genSortKey===k)?'default':k; if(G.selectedCity!=null) selectCity(G.selectedCity); }
 function closeBottom(){ document.getElementById('bottom').classList.add('hidden'); G.selectedCity=null; }
 
 /* ---------- 병과 시스템 ---------- */
@@ -1798,6 +1817,22 @@ function showGenInfo(genId){
 /* ---------- 내정 커맨드 (삼국지 2식) ---------- */
 function useAction(id){ G.actionsLeft[id]=false; }
 function bestPol(id){ const gs=G.generals.filter(g=>g.cityId===id); return gs.length?Math.max(...gs.map(g=>g.pol)):40; }
+// 내정 유효 정치력: 최고 정치력 무장이 주력(100%), 나머지 무장은 정치력의 40%를 보조 기여 (체감형 합산)
+function civilPower(id){
+  const gs=G.generals.filter(g=>g.cityId===id && g.faction===G.cities[id].owner && !g.dead);
+  if(!gs.length) return 40;
+  const pols=gs.map(g=>g.pol).sort((a,b)=>b-a);
+  let power=pols[0];               // 주력 무장 전부 반영
+  let assist=0;
+  for(let i=1;i<pols.length;i++) assist+=pols[i]*0.4;  // 보조 무장 40%씩
+  assist=Math.floor(Math.sqrt(assist)*6);              // 체감형(제곱근) 상한
+  return power+assist;
+}
+// 도시에 내정 보조로 기여하는 무장 수(주력 제외)
+function civilAssistCount(id){
+  const gs=G.generals.filter(g=>g.cityId===id && g.faction===G.cities[id].owner && !g.dead);
+  return Math.max(0,gs.length-1);
+}
 function bestInt(id){ const gs=G.generals.filter(g=>g.cityId===id); return gs.length?Math.max(...gs.map(g=>g.int)):40; }
 
 // 재야 무장 등용
@@ -1848,7 +1883,7 @@ function tryRecruitFree(genId){
 }
 function cmdDevelop(type){
   const c=G.cities[G.selectedCity]; if(c.gold<100){toast('금이 부족합니다');return;}
-  let eff = 20 + Math.floor(bestPol(c.id)*0.3);
+  let eff = 20 + Math.floor(civilPower(c.id)*0.3);
   // 내정 특기 무장이 있으면 +30%
   if(G.generals.some(g=>g.cityId===c.id && g.faction===c.owner && g.skill==='admin')) eff=Math.floor(eff*1.3);
   c.gold-=100;
@@ -1858,7 +1893,7 @@ function cmdDevelop(type){
 }
 function cmdOrder(){
   const c=G.cities[G.selectedCity]; if(c.gold<50){toast('금이 부족합니다');return;}
-  const eff=8+Math.floor(bestPol(c.id)*0.1); c.gold-=50; c.order=Math.min(100,c.order+eff);
+  const eff=8+Math.floor(civilPower(c.id)*0.1); c.gold-=50; c.order=Math.min(100,c.order+eff);
   log(`${c.name} 치안 회복 (+${eff})`); useAction(c.id); refresh();
 }
 function cmdConscript(){
@@ -1947,7 +1982,16 @@ function renderFormation(){
     <span>잔여 <b style="color:${remain<0?'#f66':'#d4af37'}">${remain.toLocaleString()}</b></span>
   </div>
   <div style="font-size:12px;color:#999;margin-bottom:8px">부대 선택(최대 5) · 병과 · 병력을 정하세요. 병과: 🐎기병 🛡️보병 🏹궁병</div>`;
-  gens.forEach(g=>{
+  // 정렬
+  const fkey = FORM.sortKey || 'default';
+  const fLabel = {default:'기본', war:'무력', lead:'통솔', int:'지력'};
+  const fBtns = ['default','war','lead','int'].map(k=>
+    `<span class="sort-btn ${fkey===k?'sort-on':''}" onclick="setFormSort('${k}')">${fLabel[k]}</span>`
+  ).join('');
+  body+=`<div class="sort-bar">정렬 ${fBtns}</div>`;
+  let fgens = gens.slice();
+  if(fkey!=='default') fgens.sort((a,b)=>b[fkey]-a[fkey]);
+  fgens.forEach(g=>{
     const p=FORM.picks.find(x=>x.genId===g.id);
     const disabled = !p.sel && selCount>=5;
     const ttBtn=(k,icon)=>{
@@ -1981,6 +2025,7 @@ function togglePick(genId){
   renderFormation();
 }
 function setTT(genId, tt){ const p=FORM.picks.find(x=>x.genId===genId); if(p.sel){ p.ttype=tt; renderFormation(); } }
+function setFormSort(k){ FORM.sortKey = (FORM.sortKey===k)?'default':k; renderFormation(); }
 function chgTroops(genId, delta){
   const p=FORM.picks.find(x=>x.genId===genId); if(!p.sel) return;
   const atk=G.cities[FORM.atkCity];
