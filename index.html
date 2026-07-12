@@ -2445,6 +2445,9 @@ function startBattle(atkId, defId, atkPicks, defPicks){
 
   document.getElementById('battle').classList.add('show');
   closeModal(); // 안전장치: 전투 진입 시 잔여 모달 확실히 닫기
+  // 전과 집계용 초기 병력 기록
+  B.atkInitTroops = B.units.filter(u=>u.side==='atk').reduce((s,u)=>s+u.troops,0);
+  B.defInitTroops = B.units.filter(u=>u.side==='def').reduce((s,u)=>s+u.troops,0);
   const roleTxt = (B.playerSide==='def' ? `🛡️ ${def.name} 방어전` : `${atk.name}→${def.name}`) + ` · ${B.terrainName||''}`;
   document.getElementById('btitle').textContent=roleTxt;
   resetBattleView();
@@ -3329,22 +3332,40 @@ function endBattle(result){
 
   if(B.playerSide==='atk'){
     // === 플레이어 공격전 ===
+    const atkLoss = B.atkInitTroops ? Math.max(0, B.atkInitTroops - atkRemain) : 0;
+    const defLoss = B.defInitTroops ? Math.max(0, B.defInitTroops - defRemain) : 0;
     if(result==='win'){
-      title='승리!'; msg=`${def.name}을(를) 점령했습니다! (잔여 ${atkRemain.toLocaleString()})`;
       const capturedFaction=def.owner;
+      const defFacName = (capturedFaction>=0 && G.factions[capturedFaction]) ? G.factions[capturedFaction].name : '수비군';
+      title='⚔️ 승리! 城 점령';
+      msg=`<div style="line-height:1.9">
+        <div style="text-align:center;font-size:15px;color:#ffd234;margin-bottom:8px"><b>${def.name}</b> 함락!</div>
+        <div style="background:#2a2418;border-radius:6px;padding:8px 12px;font-size:13px">
+          <div>🏯 <b>${def.name}</b>을(를) ${defFacName}으로부터 빼앗았습니다.</div>
+          <div style="margin-top:5px">⚔️ 적 섬멸: <b style="color:#f99">${defLoss.toLocaleString()}</b>명</div>
+          <div>🛡️ 아군 손실: <b style="color:#fc8">${atkLoss.toLocaleString()}</b>명</div>
+          <div>🚩 입성 병력: <b style="color:#8fd">${atkRemain.toLocaleString()}</b>명</div>
+        </div></div>`;
       def.owner=G.playerFaction;
       atkGenIds.forEach(id=>{ const g=G.generals.find(x=>x.id===id); if(g) g.cityId=def.id; });
       def.troops=atkRemain; def.train=atk.train;
       atk.troops=atkGarrison;
-      log(`${def.name} 점령! (잔여 ${atkRemain.toLocaleString()})`, true);
+      log(`${def.name} 점령! 적 ${defLoss.toLocaleString()} 섬멸 (잔여 ${atkRemain.toLocaleString()})`, true);
       // 방어측 무장을 포로로 (전투 참가했거나 도시 주둔)
       B.capturedGens = G.generals.filter(g=>g.cityId===def.id && g.faction===capturedFaction && g.faction!==G.playerFaction);
     } else if(result==='lose'){
-      title='패배...'; msg=`${def.name} 공략 실패. 출병 부대가 전멸했습니다.`;
+      title='💀 패배';
+      msg=`<div style="line-height:1.9">
+        <div style="text-align:center;font-size:15px;color:#e88;margin-bottom:8px"><b>${def.name}</b> 공략 실패</div>
+        <div style="background:#2a1818;border-radius:6px;padding:8px 12px;font-size:13px">
+          <div>출병 부대가 전멸했습니다.</div>
+          <div style="margin-top:5px">🛡️ 아군 손실: <b style="color:#f99">${(B.atkInitTroops||0).toLocaleString()}</b>명</div>
+          <div>⚔️ 적에게 준 피해: <b style="color:#fc8">${defLoss.toLocaleString()}</b>명</div>
+        </div></div>`;
       atk.troops=atkGarrison; def.troops=defRemain;
       log(`${def.name} 공략 실패`, true);
     } else if(result==='retreat'){
-      title='철수'; msg=`부대를 물렸습니다. (귀환 ${atkRemain.toLocaleString()})`;
+      title='🏳️ 철수'; msg=`부대를 물렸습니다. 귀환 병력 <b style="color:#8fd">${atkRemain.toLocaleString()}</b>명.`;
       atk.troops=atkGarrison+atkRemain; def.troops=defRemain;
     } else {
       title='무승부'; msg='시간 초과로 부대가 귀환합니다.';
@@ -3353,18 +3374,33 @@ function endBattle(result){
   } else {
     // === 플레이어 방어전 ===
     const atkFaction = atk.owner;
+    const atkFacName = (atkFaction>=0 && G.factions[atkFaction]) ? G.factions[atkFaction].name : '적군';
+    const defLoss = B.defInitTroops ? Math.max(0, B.defInitTroops - defRemain) : 0;
+    const atkLoss = B.atkInitTroops ? Math.max(0, B.atkInitTroops - atkRemain) : 0;
     if(result==='win'){
-      title='방어 성공!'; msg=`${def.name}을(를) 지켜냈습니다! (잔여 ${defRemain.toLocaleString()})`;
-      def.troops=defGarrison+defRemain; // 수비 잔여 + 미출전 주둔군
-      atk.troops=Math.floor(atkRemain*0.6); // 공격군 후퇴 손실
-      log(`${def.name} 방어 성공! (${G.factions[atkFaction].name} 격퇴)`, true);
+      title='🛡️ 방어 성공!';
+      msg=`<div style="line-height:1.9">
+        <div style="text-align:center;font-size:15px;color:#8fd;margin-bottom:8px"><b>${def.name}</b> 사수!</div>
+        <div style="background:#1e2a18;border-radius:6px;padding:8px 12px;font-size:13px">
+          <div>🏯 <b>${atkFacName}</b>의 침공을 격퇴했습니다.</div>
+          <div style="margin-top:5px">⚔️ 적 섬멸: <b style="color:#f99">${atkLoss.toLocaleString()}</b>명</div>
+          <div>🛡️ 아군 손실: <b style="color:#fc8">${defLoss.toLocaleString()}</b>명</div>
+        </div></div>`;
+      def.troops=defGarrison+defRemain;
+      atk.troops=Math.floor(atkRemain*0.6);
+      log(`${def.name} 방어 성공! (${atkFacName} 격퇴, 적 ${atkLoss.toLocaleString()} 섬멸)`, true);
     } else {
-      title='함락...'; msg=`${def.name}이(가) ${G.factions[atkFaction].name}에게 함락되었습니다.`;
+      title='🔥 함락...';
+      msg=`<div style="line-height:1.9">
+        <div style="text-align:center;font-size:15px;color:#e88;margin-bottom:8px"><b>${def.name}</b> 상실</div>
+        <div style="background:#2a1818;border-radius:6px;padding:8px 12px;font-size:13px">
+          <div><b>${atkFacName}</b>에게 <b>${def.name}</b>을(를) 빼앗겼습니다.</div>
+          <div style="margin-top:5px">⚔️ 적에게 준 피해: <b style="color:#fc8">${atkLoss.toLocaleString()}</b>명</div>
+        </div></div>`;
       def.owner=atkFaction;
-      // 공격군 무장이 점령지로
       B.units.filter(u=>u.side==='atk'&&u.gen).forEach(u=>{ u.gen.cityId=def.id; });
       def.troops=Math.max(300,atkRemain);
-      log(`${def.name} 함락! (${G.factions[atkFaction].name}에게 상실)`, true);
+      log(`${def.name} 함락! (${atkFacName}에게 상실)`, true);
     }
   }
   document.getElementById('battle').classList.remove('show');
