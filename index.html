@@ -118,6 +118,15 @@
   .sort-btn.sort-on{ background:var(--gold); color:#000; border-color:var(--gold); font-weight:bold; }
   .gstat .stat-hl{ color:var(--gold); }
   .synergy-note{ margin-top:6px; padding:6px 10px; background:rgba(232,200,116,0.1); border:1px solid #4a3d28; border-radius:6px; font-size:12px; color:#d8c088; }
+  .terr-legend{ display:flex; flex-direction:column; gap:8px; }
+  .terr-legend-row{ display:flex; align-items:flex-start; gap:10px; }
+  .tl-swatch{ width:22px; height:22px; border-radius:5px; flex-shrink:0; margin-top:2px; border:1px solid rgba(255,255,255,0.2); }
+  .tl-body{ flex:1; }
+  .tl-name{ font-weight:bold; color:#e8c874; font-size:14px; }
+  .tl-mc{ font-weight:normal; color:#b8a878; font-size:11px; }
+  .tl-desc{ color:#c8b8a0; font-size:12px; line-height:1.5; margin-top:2px; }
+  .terr-note{ margin-top:12px; padding:8px 10px; background:rgba(232,200,116,0.08); border:1px solid #4a3d28; border-radius:6px; font-size:12px; color:#c0b090; line-height:1.6; }
+  #terrLegendBtn{ background:none; border:none; font-size:18px; cursor:pointer; }
   .tt-badge{ font-size:12px; padding:2px 7px; border-radius:10px; font-weight:bold; }
   .tt-cav{ background:#5a2d2d; color:#ffb3b3; }
   .tt-inf{ background:#2d4a5a; color:#b3d9ff; }
@@ -419,7 +428,7 @@
 
 <div id="battle">
   <div id="bhead"><span class="bt" id="btitle">전투</span><span id="bturn"></span>
-    <span class="bfx"><button id="fxToggle" onclick="toggleFX()">🔊</button></span></div>
+    <span class="bfx"><button id="terrLegendBtn" onclick="showTerrainLegend()">🗺️</button><button id="fxToggle" onclick="toggleFX()">🔊</button></span></div>
   <div id="bmapwrap"><svg id="bsvg" viewBox="0 0 765 645" preserveAspectRatio="xMidYMid meet"></svg><div id="impactFlash"></div><div id="focusLines"></div><div id="vignette"></div><div id="bigBanner"></div></div>
   <div id="bbottom"><div id="binfo">부대를 선택하세요.</div><div id="bcmd"></div></div>
   <div id="duelStage"></div>
@@ -433,7 +442,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.23';
+const GAME_VERSION = 'v2.24';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1546,6 +1555,27 @@ const TROOP_TYPES = {
   inf:  { key:'inf',  name:'보병', icon:'🛡️', move:2, atkMul:1.0,  def:1.15, range:1 },
   arc:  { key:'arc',  name:'궁병', icon:'🏹', move:2, atkMul:0.9,  def:0.85, range:2 },
 };
+// ===== 지형 시스템 =====
+// 지형별 이동 진입 비용 (해당 칸에 들어갈 때 소모하는 이동력)
+const TERR_MOVECOST = { plain:1, road:1, forest:2, hill:2, river:3 };
+// 지형별 정보 (범례·툴팁용)
+const TERR_INFO = {
+  plain: { name:'평지', icon:'🟩', desc:'특성 없음. 이동 원활.' },
+  road:  { name:'길',  icon:'🟫', desc:'이동 빠름(비용↓). 기병 돌격 +10%.' },
+  forest:{ name:'숲',  icon:'🌲', desc:'이동 느림. 방어 +20%, 궁병 사격 방해. 기병 위력 -15%.' },
+  hill:  { name:'언덕', icon:'⛰️', desc:'이동 느림. 방어 +30%, 궁병 고지 +25%·사거리+1. 기병 -10%.' },
+  river: { name:'강',  icon:'🌊', desc:'도하 취약. 방어 -10%, 공격 -20%, 이동 크게 소모.' },
+};
+// 병과×지형 공격 배율 (공격 부대가 서 있는 지형 기준)
+function terrainAtkMul(terr, ttKey){
+  if(terr==='hill'){ if(ttKey==='arc') return 1.25; if(ttKey==='cav') return 0.9; }
+  if(terr==='forest'){ if(ttKey==='cav') return 0.85; if(ttKey==='arc') return 0.9; }
+  if(terr==='road'){ if(ttKey==='cav') return 1.1; }
+  if(terr==='river') return 0.8;
+  return 1.0;
+}
+// 언덕 위 궁병은 사거리 +1
+function terrainRangeBonus(terr, ttKey){ return (terr==='hill' && ttKey==='arc') ? 1 : 0; }
 // 상성: 기병>보병>궁병>기병 (공격 시 1.3배)
 function counterBonus(atkKey, defKey){
   if(atkKey==='cav'&&defKey==='inf') return 1.3;
@@ -2561,6 +2591,12 @@ function startBattle(atkId, defId, atkPicks, defPicks){
   }
   // 잔여 산발
   for(const h of B.hexes){ if(h.terr==='plain' && Math.random()<prof.scatter) h.terr = Math.random()<0.5?'hill':'forest'; }
+  // 길(road): 맵 중앙을 가로지르는 행에 도로 — 평지 위주로 깔되 강/언덕은 다리·고갯길로 관통
+  const roadRow=Math.floor(HEX.rows/2);
+  for(let cc=0; cc<HEX.cols; cc++){
+    const h=hexAt(cc,roadRow);
+    if(h && h.terr!=='river'){ h.terr='road'; }  // 강은 도하 지점으로 남겨 전술 요충지화
+  }
 
   // 세로로 고르게 배치하는 헬퍼
   const placeRows=(n)=>{ const rows=[]; for(let i=0;i<n;i++){ rows.push(Math.round((i+1)*HEX.rows/(n+1))); } return rows; };
@@ -2655,10 +2691,31 @@ function playerUnits(){ return B.units.filter(u=>u.side===B.playerSide && u.troo
 function enemyUnits(){ return B.units.filter(u=>u.side===enemySide() && u.troops>0); }
 
 function terrainColor(t){
-  return {plain:'#5a6b3a', forest:'#2f4a26', hill:'#7a6540', river:'#2f5a7a'}[t];
+  return {plain:'#5a6b3a', forest:'#2f4a26', hill:'#7a6540', river:'#2f5a7a', road:'#8a7550'}[t];
 }
-function terrainDefBonus(t){ return {plain:0,forest:0.2,hill:0.3,river:-0.1}[t]; }
-function terrainMoveCost(t){ return {plain:1,forest:2,hill:2,river:3}[t]; }
+function terrainDefBonus(t){ return {plain:0,forest:0.2,hill:0.3,river:-0.1,road:0}[t]; }
+function terrainMoveCost(t){ return TERR_MOVECOST[t]||1; }
+// 지형 범례 — 각 타일의 이점/특성 표시
+function showTerrainLegend(){
+  const order=['plain','road','forest','hill','river'];
+  let rows = order.map(t=>{
+    const info=TERR_INFO[t];
+    const mc=TERR_MOVECOST[t];
+    const db=terrainDefBonus(t);
+    const dbTxt = db>0?`방어 +${Math.round(db*100)}%`:(db<0?`방어 ${Math.round(db*100)}%`:'');
+    return `<div class="terr-legend-row">
+      <span class="tl-swatch" style="background:${terrainColor(t)}"></span>
+      <div class="tl-body">
+        <div class="tl-name">${info.icon} ${info.name} <span class="tl-mc">이동비용 ${mc}${dbTxt?' · '+dbTxt:''}</span></div>
+        <div class="tl-desc">${info.desc}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const legend = `<div class="terr-legend">${rows}</div>
+    <div class="terr-note">💡 이동비용은 그 칸에 <b>들어갈 때</b> 소모하는 이동력입니다. 기병 이동력 3, 보병·궁병 2.<br>
+    병과별 상성(기병▶보병▶궁병▶기병)과 지형을 함께 활용하세요.</div>`;
+  showModal('🗺️ 지형 효과', legend, [{label:'닫기',cls:'primary',fn:closeModal}]);
+}
 
 function renderBattle(){
   const svg=document.getElementById('bsvg');
@@ -2713,17 +2770,41 @@ function hexPoints(cx,cy,r){
 function unitAt(col,row){ return B.units.find(u=>u.col===col&&u.row===row&&u.troops>0); }
 function hexAt(col,row){ return B.hexes.find(h=>h.col===col&&h.row===row); }
 
+// 지형 이동비용을 반영한 도달 가능 판정 (BFS)
+function reachableHexes(u){
+  const budget=unitTT(u).move;
+  const startKey=u.col+','+u.row;
+  const dist={}; dist[startKey]=0;
+  const q=[{col:u.col,row:u.row}];
+  while(q.length){
+    const cur=q.shift(); const ck=cur.col+','+cur.row;
+    for(const nb of hexNeighbors(cur.col,cur.row)){
+      const h=hexAt(nb.col,nb.row); if(!h) continue;
+      if(unitAt(nb.col,nb.row)) continue; // 유닛이 있으면 통과 불가
+      const cost=TERR_MOVECOST[h.terr]||1;
+      const nd=dist[ck]+cost;
+      const nk=nb.col+','+nb.row;
+      if(nd<=budget && (dist[nk]===undefined || nd<dist[nk])){
+        dist[nk]=nd; q.push({col:nb.col,row:nb.row});
+      }
+    }
+  }
+  delete dist[startKey];
+  return dist; // { "col,row": cost }
+}
 function canMoveTo(u, hx){
   if(!isPlayerUnit(u)||u.moved) return false;
   if(unitAt(hx.col,hx.row)) return false;
-  const d=hexDist({col:u.col,row:u.row},hx);
-  return d>=1 && d<=unitTT(u).move; // 병과별 이동력 (기3/보2/궁2)
+  const reach=reachableHexes(u);
+  return reach[hx.col+','+hx.row]!==undefined;
 }
 function canAttackTo(u, hx){
   if(!isPlayerUnit(u)||u.acted) return false;
   const tgt=unitAt(hx.col,hx.row);
   if(!tgt||tgt.side!==enemySide()) return false;
-  return hexDist({col:u.col,row:u.row},hx)<=unitTT(u).range; // 궁병은 2칸 사거리
+  const myHex=hexAt(u.col,u.row);
+  const range=unitTT(u).range + terrainRangeBonus(myHex?myHex.terr:'plain', unitTT(u).key);
+  return hexDist({col:u.col,row:u.row},hx)<=range;
 }
 
 function onUnitClick(uid){
@@ -2745,7 +2826,23 @@ function onUnitClick(uid){
       const previews=foes.slice(0,3).map(e=>{ const c=calcAttack(u,e); return `${e.name} <b style="color:#ffd234">${c.dmgMin}~${c.dmgMax}</b>`; });
       atkHint=`<br><span style="color:#fb8">예상 피해 — ${previews.join(' / ')}</span>`;
     }
-    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격${atkHint}${duelHint}`);
+    // 현재 서 있는 지형 효과 힌트
+    const myHex=hexAt(u.col,u.row);
+    let terrHint='';
+    if(myHex){
+      const info=TERR_INFO[myHex.terr];
+      const tm=terrainAtkMul(myHex.terr, tt.key);
+      const rb=terrainRangeBonus(myHex.terr, tt.key);
+      let fx=[];
+      if(tm>1) fx.push(`공격 +${Math.round((tm-1)*100)}%`);
+      if(tm<1) fx.push(`공격 ${Math.round((tm-1)*100)}%`);
+      if(rb>0) fx.push(`사거리 +${rb}`);
+      const db=terrainDefBonus(myHex.terr);
+      if(db>0) fx.push(`방어 +${Math.round(db*100)}%`);
+      if(db<0) fx.push(`방어 ${Math.round(db*100)}%`);
+      terrHint=`<br><span style="color:#9ec8a0">${info.icon}${info.name}${fx.length?' — '+fx.join(', '):''}</span>`;
+    }
+    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격${terrHint}${atkHint}${duelHint}`);
     renderBattleCmd();
   } else {
     if(B.sel && canAttackTo(B.sel,{col:u.col,row:u.row})){
@@ -3212,7 +3309,9 @@ function tickStatuses(side){
 function unitSkill(u){ return u.gen && u.gen.skill ? u.gen.skill : 'none'; }
 function calcAttack(atkU, defU){
   const dhex=hexAt(defU.col,defU.row);
+  const ahex=hexAt(atkU.col,atkU.row);
   const defBonus=terrainDefBonus(dhex.terr);
+  const atkTerrMul=terrainAtkMul(ahex?ahex.terr:'plain', unitTT(atkU).key); // 공격측 지형 효과
   const atkTT=unitTT(atkU), defTT=unitTT(defU);
   const counterMul=counterBonus(atkTT.key, defTT.key);
   const atkApt=aptMul(atkU.gen, atkTT.key);
@@ -3230,7 +3329,7 @@ function calcAttack(atkU, defU){
   let defSkillMul=1.0;
   if(unitSkill(defU)==='defense') defSkillMul*=1.15;
   const atkPower = atkU.troops*(0.35+atkU.war/300)*(0.6+atkU.train/250)*(0.5+atkU.morale/200)
-    *atkTT.atkMul*counterMul*atkApt*atkInspired*skillMul;
+    *atkTT.atkMul*counterMul*atkApt*atkInspired*skillMul*atkTerrMul;
   const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt*defTaunted*defSkillMul;
   // 랜덤 요소(±100)를 제외한 기대값 + 범위
   const base = atkPower - defPower*0.5;
@@ -3257,7 +3356,9 @@ function doAttack(atkU, defU){
 
 function resolveAttack(atkU, defU){
   const dhex=hexAt(defU.col,defU.row);
+  const ahex=hexAt(atkU.col,atkU.row);
   const defBonus=terrainDefBonus(dhex.terr);
+  const atkTerrMul=terrainAtkMul(ahex?ahex.terr:'plain', unitTT(atkU).key);
   const atkTT=unitTT(atkU), defTT=unitTT(defU);
   const counterMul=counterBonus(atkTT.key, defTT.key); // 병과 상성
   const atkApt=aptMul(atkU.gen, atkTT.key);   // 공격측 병과 적성
@@ -3274,7 +3375,7 @@ function resolveAttack(atkU, defU){
   const defSkillMul = unitSkill(defU)==='defense' ? 1.15 : 1.0;
   // 데미지: 병과 공격배율·상성·적성 반영
   const atkPower = atkU.troops*(0.35+atkU.war/300)*(0.6+atkU.train/250)*(0.5+atkU.morale/200)
-    *atkTT.atkMul*counterMul*atkApt*atkInspired*skillMul;
+    *atkTT.atkMul*counterMul*atkApt*atkInspired*skillMul*atkTerrMul;
   const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt*defTaunted*defSkillMul;
   let dmg = Math.max(50, Math.floor(atkPower - defPower*0.5 + (Math.random()*200-100)));
   dmg = Math.min(dmg, defU.troops);
@@ -3357,15 +3458,18 @@ function enemyPhase(){
         return;
       }
     }
-    // 이동 (이동력만큼)
-    const mv=unitTT(u).move;
+    // 이동 (이동력 예산을 지형 비용으로 소모)
+    let budget=unitTT(u).move;
     if(hexDist(u,target)>unitTT(u).range){
-      for(let s=0;s<mv;s++){
+      while(budget>0){
         if(hexDist(u,target)<=unitTT(u).range) break;
-        const nbrs=hexNeighbors(u.col,u.row).filter(n=>!unitAt(n.col,n.row));
+        const nbrs=hexNeighbors(u.col,u.row).filter(n=>!unitAt(n.col,n.row)&&hexAt(n.col,n.row));
         if(!nbrs.length) break;
         nbrs.sort((a,b)=>hexDist(a,target)-hexDist(b,target));
-        u.col=nbrs[0].col; u.row=nbrs[0].row;
+        const next=nbrs[0];
+        const cost=TERR_MOVECOST[hexAt(next.col,next.row).terr]||1;
+        if(cost>budget) break; // 남은 이동력으로 못 들어가면 멈춤
+        u.col=next.col; u.row=next.row; budget-=cost;
       }
     }
     renderBattle();
