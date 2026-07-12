@@ -442,7 +442,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.25';
+const GAME_VERSION = 'v2.26';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1476,8 +1476,12 @@ function selectCity(id){
     };
     // 정렬 기준 능력치를 강조 표시
     const stat=(k,lb,v)=>`<b class="${sortKey===k?'stat-hl':''}">${lb}${v}</b>`;
+    // 아군 무장 충성 경고
+    const isMine = g.faction===G.playerFaction && g.name!==factionLordName(g.faction);
+    const el = isMine ? effLoyalty(g) : null;
+    const loyWarn = (isMine && el<40) ? `<span title="충성 낮음" style="color:${loyaltyColor(el)};font-size:11px;margin-left:3px">⚠️${el}</span>` : '';
     return `<div class="gen-row">
-      <span class="gname" onclick="showGenInfo(${g.id})" style="cursor:pointer">${g.name}<span class="pbadge" style="background:${personaColor(g)}">${personaLabel(g)}</span></span>
+      <span class="gname" onclick="showGenInfo(${g.id})" style="cursor:pointer">${g.name}<span class="pbadge" style="background:${personaColor(g)}">${personaLabel(g)}</span>${loyWarn}</span>
       <span class="apt-group">${aptCell('cav','🐎')}${aptCell('inf','🛡️')}${aptCell('arc','🏹')}</span>
       <span class="gstat">${stat('war','무',g.war)}·${stat('lead','통',g.lead)}·${stat('int','지',g.int)}·${stat('pol','정',g.pol)}</span></div>`;
   }).join('') : '<div class="gen-row" style="color:#888">주둔 무장 없음</div>';
@@ -1868,9 +1872,54 @@ function showGenInfo(genId){
     <div style="font-size:13px;color:#b8a878;margin-bottom:6px">🎭 <b>${arch.label}</b> — ${arch.trait}</div>
     ${rels.length? `<div style="font-size:13px;color:#b8a878">🤝 관계: ${rels.join(', ')}</div>` : '<div style="font-size:12px;color:#666">알려진 상성 없음</div>'}
   </div>`;
-  const btns = CODEX_OPEN ? [{label:'← 도감',cls:'',fn:()=>{ closeModal(); renderCodex(); }},{label:'닫기',cls:'primary',fn:()=>{ CODEX_OPEN=false; closeModal(); }}]
+  const isMyGen = g.faction===G.playerFaction && g.name!==factionLordName(g.faction);
+  let btns = CODEX_OPEN ? [{label:'← 도감',cls:'',fn:()=>{ closeModal(); renderCodex(); }},{label:'닫기',cls:'primary',fn:()=>{ CODEX_OPEN=false; closeModal(); }}]
     : [{label:'닫기',cls:'primary',fn:closeModal}];
+  if(isMyGen && !CODEX_OPEN){
+    btns = [{label:'🎁 포상',cls:'',fn:()=>{ closeModal(); openReward(g.id); }}, {label:'닫기',cls:'primary',fn:closeModal}];
+  }
   showModal('무장 정보', body, btns);
+}
+// 포상(하사): 금을 들여 무장 충성도 상승
+function openReward(genId){
+  const g=G.generals.find(x=>x.id===genId); if(!g) return;
+  const c=g.cityId>=0?G.cities[g.cityId]:null;
+  // 포상 재원은 그 무장이 있는 도시의 금에서 (없으면 수도 격 첫 도시)
+  const purse = c && c.owner===G.playerFaction ? c : G.cities.find(ct=>ct.owner===G.playerFaction);
+  const eff=effLoyalty(g);
+  // 성격별 금 반응 효율 (야심가는 금에 잘 반응, 충의지사는 반응 작지만 원래 높음)
+  const effMul={ambitious:1.5, cold:1.3, plain:1.1, brave:1.0, wise:0.9, loyal:0.7}[personaOf(g)]||1.0;
+  const tiers=[
+    {gold:100, label:'금 100 하사'},
+    {gold:300, label:'금 300 하사'},
+    {gold:600, label:'금 600·연회'},
+  ];
+  const rows=tiers.map(t=>{
+    const gain=Math.max(1,Math.round(t.gold/100*4*effMul));
+    const afford = purse && purse.gold>=t.gold;
+    return `<div class="listitem" style="${afford?'':'opacity:.4;pointer-events:none'}" onclick="closeModal(); doReward(${g.id},${t.gold})">
+      <b style="color:#d4af37">${t.label}</b>
+      <span style="margin-left:auto;font-size:12px;color:#8fd">충성 +${gain}</span>
+    </div>`;
+  }).join('');
+  showModal('🎁 포상',
+    `<div style="text-align:center;margin-bottom:8px">${genPortraitSVG(g,56)}<br><b style="color:var(--gold)">${g.name}</b> · 현재 충성 <b style="color:${loyaltyColor(eff)}">${eff}</b></div>
+     <p style="font-size:12px;color:#b8a878;margin-bottom:8px">금을 하사해 충성도를 높입니다. 성격에 따라 반응이 다릅니다. (보유금: ${purse?purse.gold:0})</p>${rows}`,
+    [{label:'그만두기',cls:'',fn:closeModal}]);
+}
+function doReward(genId, gold){
+  const g=G.generals.find(x=>x.id===genId); if(!g) return;
+  const c=g.cityId>=0?G.cities[g.cityId]:null;
+  const purse = c && c.owner===G.playerFaction ? c : G.cities.find(ct=>ct.owner===G.playerFaction);
+  if(!purse || purse.gold<gold){ toast('금이 부족합니다'); return; }
+  const effMul={ambitious:1.5, cold:1.3, plain:1.1, brave:1.0, wise:0.9, loyal:0.7}[personaOf(g)]||1.0;
+  const gain=Math.max(1,Math.round(gold/100*4*effMul));
+  purse.gold-=gold;
+  g.loyalty=Math.min(100,(g.loyalty||70)+gain);
+  sfx('coin'); haptic(30);
+  log(`🎁 ${g.name}에게 금 ${gold}을(를) 하사 (충성 +${gain})`);
+  toast(`${g.name} 충성 +${gain} → ${effLoyalty(g)}`);
+  refresh(); if(G.selectedCity!=null) selectCity(G.selectedCity);
 }
 
 /* ---------- 내정 커맨드 (삼국지 2식) ---------- */
