@@ -550,7 +550,7 @@ function assignSkill(war,lead,int,pol,name){
   if(pol>=85 && pol===mx) return 'admin';
   return 'none';
 }
-const DEBUT_YEAR = {"제갈량": 207, "방통": 208, "조운": 191, "마초": 200, "위연": 209, "황충": 208, "법정": 211, "마량": 209, "마충": 214, "왕평": 215, "장익": 213, "요화": 201, "관평": 200, "등지": 214, "장억": 217, "조비": 205, "조창": 208, "조식": 211, "학소": 215, "진태": 219, "곽회": 211, "제갈탄": 228, "문흠": 226, "하후패": 220, "하후무": 215, "왕쌍": 228, "손권": 200, "주유": 195, "노숙": 200, "여몽": 198, "육손": 203, "육항": 240, "능통": 204, "서성": 208, "정봉": 220, "반장": 200, "주태": 195, "진무": 195, "장흠": 196, "주환": 215, "주연": 204, "전종": 215, "제갈근": 200, "우번": 196, "감택": 200, "원담": 195, "원상": 200, "맹획": 225, "축융": 225, "가비능": 215, "견씨": 204, "대교": 199, "사마의": 201, "등애": 234, "종회": 245, "사마사": 220, "사마소": 226, "가충": 234, "강유": 228, "장완": 215, "비의": 220, "동윤": 220, "마속": 213, "부첨": 240, "제갈각": 226, "손준": 245, "손침": 252, "주이": 240, "육개": 240, "왕기": 235, "진건": 230, "제갈첨": 244, "제갈상": 261, "유선": 223, "관구검": 234, "문앙": 255, "두예": 270, "왕준": 270, "나헌": 260, "양호": 269, "장화": 270, "제갈서": 255, "조상": 239, "하안": 239, "왕릉": 251, "손자": 230, "유방": 230, "양의": 219};
+const DEBUT_YEAR = {"제갈량": 207, "방통": 208, "조운": 191, "마초": 200, "위연": 209, "황충": 208, "법정": 211, "마량": 209, "마충": 214, "왕평": 215, "장익": 213, "요화": 201, "관평": 200, "등지": 214, "장억": 217, "조비": 205, "조창": 208, "조식": 211, "학소": 215, "진태": 219, "곽회": 211, "제갈탄": 228, "문흠": 226, "하후패": 220, "하후무": 215, "왕쌍": 228, "손권": 200, "주유": 195, "노숙": 200, "여몽": 198, "육손": 203, "육항": 240, "능통": 204, "서성": 208, "정봉": 220, "반장": 200, "주태": 195, "진무": 195, "장흠": 196, "주환": 215, "주연": 204, "전종": 215, "제갈근": 200, "우번": 196, "감택": 200, "원담": 195, "원상": 200, "맹획": 225, "축융": 225, "가비능": 215, "견씨": 204, "대교": 199, "사마의": 201, "등애": 234, "종회": 245, "사마사": 220, "사마소": 226, "가충": 234, "강유": 228, "장완": 215, "비의": 220, "동윤": 220, "마속": 213, "부첨": 240, "제갈각": 226, "손준": 245, "손침": 252, "주이": 240, "육개": 240, "왕기": 235, "진건": 230, "제갈첨": 244, "제갈상": 261, "유선": 223, "관구검": 234, "문앙": 255, "두예": 270, "왕준": 270, "나헌": 260, "양호": 269, "장화": 270, "제갈서": 255, "조상": 239, "하안": 239, "왕릉": 251, "손자": 230, "유방": 230, "양의": 219, "서서": 201};
 
 const GEN_DEFS=[
   ['조조',72,94,92,95,0,17,3,3,3],
@@ -3393,9 +3393,14 @@ function checkDebutGenerals(){
   if(!nowDue.length) return;
   const newcomers=[];
   nowDue.forEach(p=>{
+    const wasFree = (p.faction===-1); // 원래 재야였는지
     let targetCity = -1;
     const origCity = G.cities[p.cityId];
-    if(origCity && origCity.owner>=0){
+    if(wasFree){
+      // 재야 무장: 원래 도시에 재야로 등장 (도시 주인 무관)
+      targetCity = (origCity ? p.cityId : -1);
+      if(targetCity<0){ const any=G.cities.filter(c=>c.owner>=0); if(any.length) targetCity=any[Math.floor(Math.random()*any.length)].id; }
+    } else if(origCity && origCity.owner>=0){
       targetCity = p.cityId;
     } else {
       const facCities = G.cities.filter(c=>c.owner===p.faction);
@@ -3404,9 +3409,10 @@ function checkDebutGenerals(){
     if(targetCity<0) return;
     const city=G.cities[targetCity];
     const g={ id:p.id, name:p.name, war:p.war, lead:p.lead, int:p.int, pol:p.pol,
-      faction:city.owner, cityId:targetCity, apt:p.apt, persona:p.persona, dead:false };
+      faction: wasFree ? -1 : city.owner, cityId:targetCity, apt:p.apt, persona:p.persona, dead:false,
+      exp:0, level:1, skill: assignSkill(p.war,p.lead,p.int,p.pol,p.name) };
     G.generals.push(g);
-    newcomers.push({name:p.name, city:city.name, faction:city.owner});
+    newcomers.push({name:p.name, city:city.name, faction:g.faction});
   });
   G.pendingGenerals = G.pendingGenerals.filter(p=>p.debut>G.year);
   const playerNew = newcomers.filter(n=>n.faction===G.playerFaction);
