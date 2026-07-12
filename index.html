@@ -97,29 +97,6 @@
   .gen-row .gname{ font-weight:bold; color:var(--gold); min-width:60px; font-size:15px; }
   .pbadge{ display:inline-block; margin-left:5px; padding:1px 6px; border-radius:8px;
     font-size:10px; color:#1a1208; font-weight:bold; vertical-align:middle; }
-  /* 무장 도감 */
-  .codex-search input{ width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--gold);
-    background:#1a1510; color:var(--ink); font-size:14px; margin-bottom:8px; }
-  .codex-facbar{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
-  .codex-fac{ font-size:11px; padding:3px 8px; border-radius:10px; border:1px solid #444;
-    background:#1a1510; color:#b8a878; cursor:pointer; }
-  .codex-fac.on{ background:var(--gold); color:#000; border-color:var(--gold); font-weight:bold; }
-  .codex-sortbar{ display:flex; gap:4px; align-items:center; margin-bottom:8px; }
-  .codex-sort{ font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid #555;
-    background:#1a1510; color:#b8a878; cursor:pointer; }
-  .codex-sort.on{ background:#3a5a8a; color:#fff; border-color:#5a8ac0; font-weight:bold; }
-  .codex-count{ margin-left:auto; font-size:12px; color:#888; }
-  .codex-list{ max-height:52vh; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
-  .codex-row{ display:flex; align-items:center; gap:8px; padding:5px 6px; background:var(--panel2);
-    border-radius:6px; cursor:pointer; }
-  .codex-row:active{ background:#3a2f1e; }
-  .codex-portrait{ flex-shrink:0; width:44px; height:48px; }
-  .codex-portrait svg{ border-radius:5px; }
-  .codex-info{ flex:1; min-width:0; }
-  .codex-name{ font-size:14px; color:var(--gold); }
-  .codex-sub{ font-size:11px; color:#999; }
-  .codex-stats{ display:flex; gap:6px; font-size:11px; color:#b8a878; flex-shrink:0; }
-  .codex-stats .hl{ color:#ffd234; font-weight:bold; }
   .apt-group{ display:flex; gap:3px; }
   .apt-cell{ font-size:11px; padding:2px 5px; border-radius:8px; background:#1a1510;
     border:1px solid var(--line); color:#888; }
@@ -177,6 +154,23 @@
   .modal h3{ background:var(--panel2); color:var(--gold); padding:10px 14px; font-size:16px;
     border-bottom:1px solid var(--line); }
   .modal .mbody{ padding:14px; font-size:13px; line-height:1.6; }
+  /* 무장 도감 */
+  .codex-controls{ position:sticky; top:0; background:var(--panel); padding-bottom:8px; z-index:2; }
+  .codex-search{ width:100%; padding:8px 10px; border-radius:6px; border:1px solid var(--gold);
+    background:var(--panel2); color:var(--ink); font-size:14px; margin-bottom:6px; }
+  .codex-filters{ display:flex; gap:6px; }
+  .codex-sel{ flex:1; padding:6px; border-radius:6px; border:1px solid #5a4a2a; background:var(--panel2); color:var(--ink); font-size:13px; }
+  .codex-list{ max-height:58vh; overflow-y:auto; margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .codex-card{ display:flex; gap:8px; padding:6px; background:var(--panel2); border-radius:8px; cursor:pointer;
+    border:1px solid transparent; align-items:center; }
+  .codex-card:active{ border-color:var(--gold); background:#3a2f1c; }
+  .codex-portrait{ flex-shrink:0; }
+  .codex-portrait svg{ border-radius:6px; display:block; }
+  .codex-info{ min-width:0; flex:1; }
+  .codex-name{ font-weight:bold; color:var(--gold); font-size:14px; display:flex; align-items:center; gap:3px; flex-wrap:wrap; }
+  .codex-stats{ font-size:11px; color:#c8b890; margin-top:1px; }
+  .codex-meta{ font-size:10px; color:#8a7a5a; margin-top:1px; }
+  @media(max-width:380px){ .codex-list{ grid-template-columns:1fr; } }
   .modal .mfoot{ padding:10px 14px; display:flex; gap:8px; justify-content:flex-end; border-top:1px solid var(--line); }
   .btn{ background:var(--panel2); border:1px solid var(--gold); color:var(--ink); padding:8px 16px;
     border-radius:6px; cursor:pointer; font-size:13px; }
@@ -336,7 +330,7 @@
       <span class="date" id="date">190년 1월</span>
       <span id="allianceBadge"></span>
       <div class="topbtns">
-        <button class="tbtn" onclick="openCodex()" title="무장 도감">👤</button>
+        <button class="tbtn" onclick="showGenCodex()" title="무장 도감">📖</button>
         <button class="tbtn" onclick="doSave()" title="저장">💾</button>
         <button class="tbtn" onclick="doLoad()" title="불러오기">📁</button>
       </div>
@@ -1027,7 +1021,7 @@ function selectCity(id){
       return `<span class="apt-cell ${hi?'apt-hi':''} ${isBest?'apt-best':''}">${label}${lbl}</span>`;
     };
     return `<div class="gen-row">
-      <span class="gname" onclick="showGenInfo(${g.id},false)" style="cursor:pointer">${g.name}<span class="pbadge" style="background:${personaColor(g)}">${personaLabel(g)}</span></span>
+      <span class="gname" onclick="showGenInfo(${g.id})" style="cursor:pointer">${g.name}<span class="pbadge" style="background:${personaColor(g)}">${personaLabel(g)}</span></span>
       <span class="apt-group">${aptCell('cav','🐎')}${aptCell('inf','🛡️')}${aptCell('arc','🏹')}</span>
       <span class="gstat">무${g.war}·통${g.lead}·지${g.int}</span></div>`;
   }).join('') : '<div class="gen-row" style="color:#888">주둔 무장 없음</div>';
@@ -1252,82 +1246,59 @@ function allyMoraleBonus(units, side){
 function personaMoraleFactor(gen){ return personaOf(gen)==='cold' ? 0.5 : 1.0; }
 
 // 무장 상세 정보 모달
-/* ---------- 무장 도감 (열람/검색) ---------- */
-let CODEX = { faction:-1, sort:'war', q:'', _open:false };
-function openCodex(){
-  CODEX = { faction:-1, sort:'war', q:'', _open:true };
+/* ---------- 무장 도감 (전체 무장 검색·열람) ---------- */
+let CODEX_STATE = { q:'', faction:-2, sort:'war' };
+let CODEX_OPEN = false;
+function showGenCodex(){
+  CODEX_OPEN=true;
   renderCodex();
 }
+function codexSetFaction(f){ CODEX_STATE.faction=parseInt(f); renderCodex(); }
+function codexSetSort(s){ CODEX_STATE.sort=s; renderCodex(); }
+function codexSearch(v){ CODEX_STATE.q=v; renderCodexList(); }
 function renderCodex(){
-  const facBtns = [['전체',-1],...FACTIONS.map((f,i)=>[f.name,i]).filter(([n,i])=>G.generals.some(g=>g.faction===i))];
-  const facBar = facBtns.map(([n,i])=>`<button class="codex-fac ${CODEX.faction===i?'on':''}" onclick="CODEX.faction=${i};renderCodex()">${n}</button>`).join('');
-  const sorts=[['무력','war'],['통솔','lead'],['지력','int'],['정치','pol']];
-  const sortBar = sorts.map(([n,k])=>`<button class="codex-sort ${CODEX.sort===k?'on':''}" onclick="CODEX.sort='${k}';renderCodex()">${n}▼</button>`).join('');
-  // 필터링
-  let list=G.generals.slice();
-  if(CODEX.faction>=0) list=list.filter(g=>g.faction===CODEX.faction);
-  if(CODEX.q){ const q=CODEX.q.trim(); if(q) list=list.filter(g=>g.name.includes(q)); }
-  list.sort((a,b)=>b[CODEX.sort]-a[CODEX.sort]);
-  const total=list.length;
-  const rows = list.slice(0,120).map(g=>{
-    const fac=G.factions[g.faction];
-    const facTag=fac?`<span style="color:${fac.color};font-size:10px">${fac.name}</span>`:'';
-    const cityName=g.cityId>=0&&G.cities[g.cityId]?G.cities[g.cityId].name:'재야';
-    return `<div class="codex-row" onclick="showGenInfo(${g.id},true)">
-      <div class="codex-portrait">${genPortraitSVG(g,44)}</div>
-      <div class="codex-info">
-        <div class="codex-name"><b>${g.name}</b> <span class="pbadge" style="background:${personaColor(g)};font-size:9px">${personaLabel(g)}</span></div>
-        <div class="codex-sub">${facTag} · ${cityName}</div>
-      </div>
-      <div class="codex-stats">
-        <span class="${CODEX.sort==='war'?'hl':''}">무${g.war}</span>
-        <span class="${CODEX.sort==='lead'?'hl':''}">통${g.lead}</span>
-        <span class="${CODEX.sort==='int'?'hl':''}">지${g.int}</span>
-        <span class="${CODEX.sort==='pol'?'hl':''}">정${g.pol}</span>
-      </div>
-    </div>`;
-  }).join('');
+  // 세력 필터 옵션 (살아있는 세력 + 전체)
+  const facOpts = [`<option value="-2">전 세력</option>`]
+    .concat(FACTIONS.map((f,i)=>{
+      const cnt=G.generals.filter(g=>g.faction===i).length;
+      return cnt>0?`<option value="${i}" ${CODEX_STATE.faction===i?'selected':''}>${f.name} (${cnt})</option>`:'';
+    })).join('');
+  const sortOpts=[['war','무력'],['lead','통솔'],['int','지력'],['pol','정치']]
+    .map(([k,l])=>`<option value="${k}" ${CODEX_STATE.sort===k?'selected':''}>${l}순</option>`).join('');
   const body=`
-    <div class="codex-search">
-      <input type="text" id="codexQ" placeholder="🔍 무장 이름 검색" value="${CODEX.q}"
-        oninput="CODEX.q=this.value;renderCodexList()" />
+    <div class="codex-controls">
+      <input id="codexQ" class="codex-search" placeholder="🔍 무장 이름 검색" value="${CODEX_STATE.q}" oninput="codexSearch(this.value)">
+      <div class="codex-filters">
+        <select class="codex-sel" onchange="codexSetFaction(this.value)">${facOpts}</select>
+        <select class="codex-sel" onchange="codexSetSort(this.value)">${sortOpts}</select>
+      </div>
     </div>
-    <div class="codex-facbar">${facBar}</div>
-    <div class="codex-sortbar">${sortBar}<span class="codex-count">${total}명</span></div>
-    <div class="codex-list" id="codexList">${rows}</div>
-    ${total>120?'<div style="text-align:center;color:#888;font-size:11px;padding:6px">상위 120명 표시 · 검색으로 좁혀보세요</div>':''}
-  `;
-  showModal('👤 무장 도감', body, [{label:'닫기',cls:'primary',fn:closeModal}]);
+    <div id="codexList" class="codex-list"></div>`;
+  showModal(`📖 무장 도감 (${G.generals.length}명)`, body, [{label:'닫기',cls:'primary',fn:()=>{ CODEX_OPEN=false; closeModal(); }}]);
+  renderCodexList();
 }
-// 검색 입력 시 리스트만 갱신(포커스 유지)
 function renderCodexList(){
-  let list=G.generals.slice();
-  if(CODEX.faction>=0) list=list.filter(g=>g.faction===CODEX.faction);
-  if(CODEX.q){ const q=CODEX.q.trim(); if(q) list=list.filter(g=>g.name.includes(q)); }
-  list.sort((a,b)=>b[CODEX.sort]-a[CODEX.sort]);
   const el=document.getElementById('codexList'); if(!el) return;
-  el.innerHTML = list.slice(0,120).map(g=>{
-    const fac=G.factions[g.faction];
-    const facTag=fac?`<span style="color:${fac.color};font-size:10px">${fac.name}</span>`:'';
-    const cityName=g.cityId>=0&&G.cities[g.cityId]?G.cities[g.cityId].name:'재야';
-    return `<div class="codex-row" onclick="showGenInfo(${g.id},true)">
-      <div class="codex-portrait">${genPortraitSVG(g,44)}</div>
+  let list=G.generals.slice();
+  if(CODEX_STATE.faction>=-1) list=list.filter(g=>g.faction===CODEX_STATE.faction);
+  if(CODEX_STATE.q){ const q=CODEX_STATE.q.trim(); list=list.filter(g=>g.name.includes(q)); }
+  const key=CODEX_STATE.sort;
+  list.sort((a,b)=> b[key]-a[key]);
+  if(!list.length){ el.innerHTML=`<div style="text-align:center;color:#888;padding:20px">해당 무장이 없습니다.</div>`; return; }
+  el.innerHTML=list.map(g=>{
+    const fac=G.factions[g.faction]; const facName=fac?fac.name:'재야';
+    const city=g.cityId>=0&&G.cities[g.cityId]?G.cities[g.cityId].name:'-';
+    return `<div class="codex-card" onclick="showGenInfo(${g.id})">
+      <div class="codex-portrait">${genPortraitSVG(g,56)}</div>
       <div class="codex-info">
-        <div class="codex-name"><b>${g.name}</b> <span class="pbadge" style="background:${personaColor(g)};font-size:9px">${personaLabel(g)}</span></div>
-        <div class="codex-sub">${facTag} · ${cityName}</div>
-      </div>
-      <div class="codex-stats">
-        <span class="${CODEX.sort==='war'?'hl':''}">무${g.war}</span>
-        <span class="${CODEX.sort==='lead'?'hl':''}">통${g.lead}</span>
-        <span class="${CODEX.sort==='int'?'hl':''}">지${g.int}</span>
-        <span class="${CODEX.sort==='pol'?'hl':''}">정${g.pol}</span>
-      </div>
-    </div>`;
+        <div class="codex-name">${g.name}<span class="pbadge" style="background:${personaColor(g)};font-size:9px">${personaLabel(g)}</span></div>
+        <div class="codex-stats">무${g.war} 통${g.lead} 지${g.int} 정${g.pol}</div>
+        <div class="codex-meta">${facName} · ${city}</div>
+      </div></div>`;
   }).join('');
 }
 
-function showGenInfo(genId, fromCodex){
-  if(fromCodex!==undefined) CODEX._open = !!fromCodex;
+function showGenInfo(genId){
   const g=G.generals.find(x=>x.id===genId); if(!g) return;
   const arch=ARCHETYPES[personaOf(g)];
   const best=bestAptType(g);
@@ -1363,8 +1334,9 @@ function showGenInfo(genId, fromCodex){
     <div style="font-size:13px;color:#b8a878;margin-bottom:6px">🎭 <b>${arch.label}</b> — ${arch.trait}</div>
     ${rels.length? `<div style="font-size:13px;color:#b8a878">🤝 관계: ${rels.join(', ')}</div>` : '<div style="font-size:12px;color:#666">알려진 상성 없음</div>'}
   </div>`;
-  const backFn = (CODEX && CODEX._open) ? (()=>{ renderCodex(); }) : closeModal;
-  showModal('무장 정보', body, [{label:(CODEX&&CODEX._open)?'← 도감':'닫기',cls:'primary',fn:backFn}]);
+  const btns = CODEX_OPEN ? [{label:'← 도감',cls:'',fn:()=>{ closeModal(); renderCodex(); }},{label:'닫기',cls:'primary',fn:()=>{ CODEX_OPEN=false; closeModal(); }}]
+    : [{label:'닫기',cls:'primary',fn:closeModal}];
+  showModal('무장 정보', body, btns);
 }
 
 /* ---------- 내정 커맨드 (삼국지 2식) ---------- */
