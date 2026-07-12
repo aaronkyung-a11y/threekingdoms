@@ -86,9 +86,11 @@
 
   .cmd-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
   .cmd-btn{ background:linear-gradient(#4a3f28,#332a1c); border:1px solid var(--gold); color:var(--ink);
-    padding:15px 4px; border-radius:6px; font-size:15px; cursor:pointer; text-align:center; font-weight:bold; }
+    padding:12px 4px; border-radius:6px; font-size:14px; cursor:pointer; text-align:center; font-weight:bold; line-height:1.3; }
   .cmd-btn:active{ background:var(--gold); color:#000; }
   .cmd-btn.disabled{ opacity:0.35; pointer-events:none; }
+  .cmd-eff{ display:block; font-size:11px; font-weight:bold; color:#8fd; margin-top:2px; }
+  .cmd-cost{ color:#c8a858; font-weight:normal; margin-left:4px; }
 
   .generals{ margin-top:6px; }
   .generals.collapsed{ max-height:0; overflow:hidden; margin:0; }
@@ -267,6 +269,16 @@
   /* 히트스톱(순간 정지 느낌) */
   #battle.hitstop #bmapwrap{ animation:hitstop .12s step-end; }
   @keyframes hitstop{ 0%{filter:brightness(1.6) contrast(1.3)} 100%{filter:none} }
+  /* 교전 강조: 유닛 글로우 링 */
+  .unit-glow{ position:absolute; transform:translate(-50%,-50%) scale(var(--gsc,1)); pointer-events:none; z-index:14;
+    width:52px; height:52px; border-radius:50%; border:3px solid var(--gcol,#ffd234);
+    box-shadow:0 0 14px var(--gcol,#ffd234), inset 0 0 10px var(--gcol,#ffd234); animation:unitGlow .42s ease-out forwards; }
+  @keyframes unitGlow{ 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 35%{opacity:1;transform:translate(-50%,-50%) scale(var(--gsc,1.2))} 100%{opacity:0;transform:translate(-50%,-50%) scale(calc(var(--gsc,1.2) * 1.25))} }
+  /* 교전 라인(충돌 선) */
+  .clash-line{ position:absolute; height:4px; transform-origin:0 50%; pointer-events:none; z-index:13;
+    background:linear-gradient(90deg, transparent, #ffe9a0, transparent); border-radius:2px;
+    box-shadow:0 0 8px #ffd234; animation:clashLn .38s ease-out forwards; }
+  @keyframes clashLn{ 0%{opacity:0;transform:rotate(var(--r,0)) scaleX(.3)} 40%{opacity:1} 100%{opacity:0;transform:rotate(var(--r,0)) scaleX(1)} }
 
   /* 일기토 스테이지 */
   #duelStage{ position:absolute; inset:0; z-index:40; display:none; flex-direction:column;
@@ -1084,12 +1096,21 @@ function selectCity(id){
   let cmds = '';
   if(isPlayer){
     const dis = acted ? 'disabled' : '';
+    // 예상 효과 계산
+    const devEff = 20 + Math.floor(bestPol(c.id)*0.3);
+    const orderEff = 8+Math.floor(bestPol(c.id)*0.1);
+    const conscript = Math.min(Math.floor(c.pop*0.05),3000);
+    const gs=G.generals.filter(g=>g.cityId===c.id);
+    const lead=gs.length?Math.max(...gs.map(g=>g.lead)):40;
+    const trainEff=8+Math.floor(lead*0.15);
+    const sub=(v,cost)=>`<span class="cmd-eff">+${v} <span class="cmd-cost">(${cost}금)</span></span>`;
+    const subC=(v,cost)=>`<span class="cmd-eff">+${v.toLocaleString()} <span class="cmd-cost">(${cost}금)</span></span>`;
     cmds = `<div class="cmd-grid">
-      <div class="cmd-btn ${dis}" onclick="cmdDevelop('agri')">🌾개발·농업</div>
-      <div class="cmd-btn ${dis}" onclick="cmdDevelop('comm')">💰개발·상업</div>
-      <div class="cmd-btn ${dis}" onclick="cmdOrder()">🛡️치안</div>
-      <div class="cmd-btn ${dis}" onclick="cmdConscript()">⚔️징병</div>
-      <div class="cmd-btn ${dis}" onclick="cmdTrain()">🏋️훈련</div>
+      <div class="cmd-btn ${c.gold<100?'disabled':dis}" onclick="cmdDevelop('agri')">🌾농업${sub(devEff,100)}</div>
+      <div class="cmd-btn ${c.gold<100?'disabled':dis}" onclick="cmdDevelop('comm')">💰상업${sub(devEff,100)}</div>
+      <div class="cmd-btn ${c.gold<50?'disabled':dis}" onclick="cmdOrder()">🛡️치안${sub(orderEff,50)}</div>
+      <div class="cmd-btn ${c.gold<200?'disabled':dis}" onclick="cmdConscript()">⚔️징병${subC(conscript,200)}</div>
+      <div class="cmd-btn ${c.gold<80?'disabled':dis}" onclick="cmdTrain()">🏋️훈련${sub(trainEff,80)}</div>
       <div class="cmd-btn" onclick="cmdAttack()">🔥출병·공격</div>
     </div>${acted?'<div class="acted-note">이번 달 내정 명령을 사용했습니다 (출병은 가능)</div>':''}`;
   }
@@ -1823,6 +1844,43 @@ function hexToScreen(col,row){
   const vb=svg.viewBox.baseVal; const r=svg.getBoundingClientRect();
   return { px:(x-vb.x)/vb.width*r.width, py:(y-vb.y)/vb.height*r.height };
 }
+// 유닛 위치에 잠깐 빛나는 링 (교전 강조)
+function glowUnit(col,row,color,scale){
+  const wrap=document.getElementById('bmapwrap'); if(!wrap) return;
+  const {px,py}=hexToScreen(col,row);
+  const g=document.createElement('div'); g.className='unit-glow';
+  g.style.left=px+'px'; g.style.top=py+'px';
+  g.style.setProperty('--gcol', color||'#ffd234');
+  if(scale) g.style.setProperty('--gsc', scale);
+  wrap.appendChild(g); setTimeout(()=>g.remove(),420);
+}
+// 두 부대 사이 교전 라인(충돌 선)
+function clashLine(c1,r1,c2,r2,color){
+  const wrap=document.getElementById('bmapwrap'); if(!wrap) return;
+  const a=hexToScreen(c1,r1), b=hexToScreen(c2,r2);
+  const dx=b.px-a.px, dy=b.py-a.py, len=Math.hypot(dx,dy), ang=Math.atan2(dy,dx)*180/Math.PI;
+  const l=document.createElement('div'); l.className='clash-line';
+  l.style.left=a.px+'px'; l.style.top=a.py+'px';
+  l.style.width=len+'px'; l.style.setProperty('--r', ang+'deg');
+  if(color) l.style.background=`linear-gradient(90deg, transparent, ${color}, transparent)`;
+  wrap.appendChild(l); setTimeout(()=>l.remove(),380);
+}
+// 교전 연출: 공격·방어 부대가 번갈아 빛나며 맞붙는 시퀀스, 완료 후 콜백
+function playClash(atkU, defU, onDone){
+  const steps=[
+    ()=>{ glowUnit(atkU.col,atkU.row,'#6fd3ff',1.15); sfx('select'); haptic(20); },
+    ()=>{ glowUnit(defU.col,defU.row,'#ff8a6e',1.15); sfx('select'); haptic(20); },
+    ()=>{ glowUnit(atkU.col,atkU.row,'#6fd3ff',1.25); clashLine(atkU.col,atkU.row,defU.col,defU.row,'#ffe9a0'); haptic(30); },
+    ()=>{ glowUnit(defU.col,defU.row,'#ff8a6e',1.25); clashLine(defU.col,defU.row,atkU.col,atkU.row,'#ffe9a0'); haptic(30); },
+  ];
+  let i=0;
+  const run=()=>{
+    if(i<steps.length){ steps[i](); i++; setTimeout(run,140); }
+    else { onDone && onDone(); }
+  };
+  run();
+}
+
 // 전체화면 임팩트 플래시
 function impactFlash(kind){
   const el=document.getElementById('impactFlash'); if(!el) return;
@@ -2176,16 +2234,55 @@ function onUnitClick(uid){
     const aptTxt=u.gen?` (${tt.name}적성 ${aptLabel(u.gen,tt.key)})`:'';
     const dtgt=duelTargetFor(u);
     const duelHint = dtgt ? `<br><span style="color:#f88">⚔️ ${dtgt.name}에게 일기토 가능! (아래 버튼)</span>` : '';
-    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격${duelHint}`);
+    // 사거리 내 공격 가능한 적 + 예상 피해
+    const foes=enemyUnits().filter(e=>hexDist(u,e)<=tt.range && !u.acted);
+    let atkHint='';
+    if(foes.length && !u.acted){
+      const previews=foes.slice(0,3).map(e=>{ const c=calcAttack(u,e); return `${e.name} <b style="color:#ffd234">${c.dmgMin}~${c.dmgMax}</b>`; });
+      atkHint=`<br><span style="color:#fb8">예상 피해 — ${previews.join(' / ')}</span>`;
+    }
+    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격${atkHint}${duelHint}`);
     renderBattleCmd();
   } else {
     if(B.sel && canAttackTo(B.sel,{col:u.col,row:u.row})){
-      maybeDuelThenAttack(B.sel,u);
+      showAttackPreview(B.sel, u);
     } else {
       const tt=unitTT(u);
       binfo(`[적] ${u.name} ${tt.icon}${tt.name} · 병력 ${u.troops} · 사기 ${u.morale}`);
     }
   }
+}
+// 공격 전 예상 피해 미리보기
+function showAttackPreview(atkU, defU){
+  const c=calcAttack(atkU, defU);
+  const atkTT=c.atkTT, defTT=c.defTT;
+  const dmgRange = c.dmgMin===c.dmgMax ? `${c.dmgMin}` : `${c.dmgMin}~${c.dmgMax}`;
+  const willRout = c.dmgMax>=defU.troops;
+  const counterTxt = c.isRanged ? `<span style="color:#8fa">원거리 — 반격 없음</span>`
+    : (c.cExp>0 ? `예상 반격 <b style="color:#f99">${c.cMin}~${c.cMax}</b>` : '반격 없음');
+  let tags='';
+  if(c.counterMul>1.05) tags+=`<span style="color:#8fd">병과우세 </span>`;
+  else if(c.counterMul<0.95) tags+=`<span style="color:#f99">병과열세 </span>`;
+  if(c.atkInspired>1) tags+=`<span style="color:#ffd234">분전 </span>`;
+  if(c.defTaunted<1) tags+=`<span style="color:#8fa">유인 </span>`;
+  const body=`<div style="line-height:1.7">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="text-align:center"><b style="color:#6fd3ff">${atkU.name}</b><br><span style="font-size:11px;color:#999">${atkTT.icon}${atkTT.name} · 병력 ${atkU.troops}</span></div>
+      <span style="color:#d4af37;font-size:20px">⚔</span>
+      <div style="text-align:center"><b style="color:#ff8a6e">${defU.name}</b><br><span style="font-size:11px;color:#999">${defTT.icon}${defTT.name} · 병력 ${defU.troops}</span></div>
+    </div>
+    ${tags?`<div style="text-align:center;font-size:12px;margin-bottom:6px">${tags}</div>`:''}
+    <div style="background:#2a2418;border-radius:6px;padding:8px;text-align:center">
+      예상 피해 <b style="color:#ffd234;font-size:18px">${dmgRange}</b>
+      ${willRout?`<br><span style="color:#ff6a6a;font-weight:bold">☠️ 적 궤멸 가능!</span>`:''}
+      <br><span style="font-size:12px">${counterTxt}</span>
+    </div>
+    <div style="font-size:11px;color:#888;margin-top:6px;text-align:center">실제 피해는 지형·사기·변수로 달라질 수 있습니다.</div>
+  </div>`;
+  showModal('공격 예상', body, [
+    {label:'취소',cls:'',fn:closeModal},
+    {label:'⚔️ 공격!',cls:'primary',fn:()=>{ closeModal(); maybeDuelThenAttack(atkU, defU); }}
+  ]);
 }
 function onHexClick(col,row){
   if(BVIEW.dragged) return;
@@ -2606,7 +2703,44 @@ function tickStatuses(side){
   }
 }
 
+// 데미지 계산(미리보기·실행 공용). 실제 troops 변경 없음.
+function calcAttack(atkU, defU){
+  const dhex=hexAt(defU.col,defU.row);
+  const defBonus=terrainDefBonus(dhex.terr);
+  const atkTT=unitTT(atkU), defTT=unitTT(defU);
+  const counterMul=counterBonus(atkTT.key, defTT.key);
+  const atkApt=aptMul(atkU.gen, atkTT.key);
+  const defApt=aptMul(defU.gen, defTT.key);
+  const isRanged = hexDist(atkU,defU)>1;
+  const atkInspired = atkU.status && atkU.status.inspired ? 1.4 : 1.0;
+  const defTaunted = defU.status && defU.status.taunted ? 0.75 : 1.0;
+  const atkPower = atkU.troops*(0.35+atkU.war/300)*(0.6+atkU.train/250)*(0.5+atkU.morale/200)
+    *atkTT.atkMul*counterMul*atkApt*atkInspired;
+  const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt*defTaunted;
+  // 랜덤 요소(±100)를 제외한 기대값 + 범위
+  const base = atkPower - defPower*0.5;
+  const expected = Math.max(50, Math.floor(base));
+  const dmgMin = Math.max(50, Math.floor(base-100));
+  const dmgMax = Math.max(50, Math.floor(base+100));
+  // 예상 반격
+  let cMin=0,cMax=0,cExp=0;
+  if(!isRanged){
+    const dCounterMul=counterBonus(defTT.key, atkTT.key);
+    const cbase = defU.troops*(0.15+defU.war/400)*(0.5+defU.morale/200)*defTT.atkMul*dCounterMul*defApt;
+    cExp=Math.max(20,Math.floor(cbase)); cMin=Math.max(20,Math.floor(cbase-50)); cMax=Math.max(20,Math.floor(cbase+50));
+  }
+  return {counterMul,atkApt,defApt,isRanged,atkInspired,defTaunted,atkTT,defTT,
+    expected, dmgMin:Math.min(dmgMin,defU.troops), dmgMax:Math.min(dmgMax,defU.troops),
+    cExp, cMin, cMax};
+}
+
 function doAttack(atkU, defU){
+  // 먼저 교전 연출(두 부대 번갈아 빛남) 재생 후 실제 타격
+  B.animating=true;
+  playClash(atkU, defU, ()=>{ B.animating=false; resolveAttack(atkU, defU); });
+}
+
+function resolveAttack(atkU, defU){
   const dhex=hexAt(defU.col,defU.row);
   const defBonus=terrainDefBonus(dhex.terr);
   const atkTT=unitTT(atkU), defTT=unitTT(defU);
@@ -2733,6 +2867,7 @@ function enemyAttack(atkU,defU){
   let dmg=Math.max(40,Math.floor(atkPower-defPower*0.5+(Math.random()*160-80)));
   dmg=Math.min(dmg,defU.troops); defU.troops-=dmg; defU.morale=Math.max(0,defU.morale-10);
   const big = dmg>=defU.maxTroops*0.35 || cm>1.05;
+  glowUnit(atkU.col,atkU.row,'#ff8a6e',1.2); clashLine(atkU.col,atkU.row,defU.col,defU.row,'#ffb0a0');
   if(isRanged) sfx('arrow'); else sfx(big?'crit':'hit');
   hitFlash(defU.col,defU.row); popDamage(defU.col,defU.row,'-'+dmg, big?'crit':''); shake(big?'m':'s'); haptic(big?70:35);
   let msg=`[적] ${atkU.name}(${atkTT.icon}) → ${defU.name}(${defTT.icon}) · 피해 ${dmg}`;
