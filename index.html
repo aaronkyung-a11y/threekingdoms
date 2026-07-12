@@ -91,6 +91,10 @@
   .cmd-btn.disabled{ opacity:0.35; pointer-events:none; }
   .cmd-eff{ display:block; font-size:11px; font-weight:bold; color:#8fd; margin-top:2px; }
   .cmd-cost{ color:#c8a858; font-weight:normal; margin-left:4px; }
+  .dip-btn{ flex:1; padding:7px; border-radius:5px; border:1px solid var(--gold); background:var(--panel2);
+    color:var(--ink); font-size:12px; cursor:pointer; }
+  .dip-btn:active{ background:var(--gold); color:#000; }
+  .dip-btn:disabled{ opacity:.35; }
 
   .generals{ margin-top:6px; }
   .generals.collapsed{ max-height:0; overflow:hidden; margin:0; }
@@ -371,6 +375,7 @@
       <span class="date" id="date">190년 1월</span>
       <span id="allianceBadge"></span>
       <div class="topbtns">
+        <button class="tbtn" onclick="showDiplomacy()" title="외교">🕊️</button>
         <button class="tbtn" onclick="showGenCodex()" title="무장 도감">📖</button>
         <button class="tbtn" onclick="doSave()" title="저장">💾</button>
         <button class="tbtn" onclick="doLoad()" title="불러오기">📁</button>
@@ -425,6 +430,7 @@ const G = {
   alliance: { active:false, target:1, endTurn:13 },
   scenario: 's190',
   pendingGenerals: [],
+  diplomacy: {}, // 세력쌍 관계: key "a-b" → {relation:-100~100, pact:'none'|'nonaggression'|'alliance', pactEnd:turn}
   eventFlags: {},
   pendingDefense: [],
 };
@@ -2999,11 +3005,14 @@ function endBattle(result){
     // === 플레이어 공격전 ===
     if(result==='win'){
       title='승리!'; msg=`${def.name}을(를) 점령했습니다! (잔여 ${atkRemain.toLocaleString()})`;
+      const capturedFaction=def.owner;
       def.owner=G.playerFaction;
       atkGenIds.forEach(id=>{ const g=G.generals.find(x=>x.id===id); if(g) g.cityId=def.id; });
       def.troops=atkRemain; def.train=atk.train;
       atk.troops=atkGarrison;
       log(`${def.name} 점령! (잔여 ${atkRemain.toLocaleString()})`, true);
+      // 방어측 무장을 포로로 (전투 참가했거나 도시 주둔)
+      B.capturedGens = G.generals.filter(g=>g.cityId===def.id && g.faction===capturedFaction && g.faction!==G.playerFaction);
     } else if(result==='lose'){
       title='패배...'; msg=`${def.name} 공략 실패. 출병 부대가 전멸했습니다.`;
       atk.troops=atkGarrison; def.troops=defRemain;
@@ -3035,10 +3044,67 @@ function endBattle(result){
   document.getElementById('battle').classList.remove('show');
   B.active=false;
   const after=()=>{ closeModal(); if(B.playerSide==='atk') useAction(atk.id); refresh(); checkGameEnd();
+    // 포로 회유 (점령 시 방어측 무장)
+    if(B.capturedGens && B.capturedGens.length){
+      const caps=B.capturedGens; B.capturedGens=null;
+      setTimeout(()=>showCaptiveScreen(caps, def), 400);
+      return;
+    }
     // 대기 중인 다음 방어전 처리
     if(G.pendingDefense && G.pendingDefense.length){ const d=G.pendingDefense.shift(); setTimeout(()=>openDefenseFormation(d.atkId,d.defId),400); }
   };
   showModal(title, msg, [{label:'확인',cls:'primary',fn:after}]);
+}
+
+// 포로 회유 화면
+function showCaptiveScreen(captives, city){
+  if(!captives.length){ if(G.pendingDefense&&G.pendingDefense.length){const d=G.pendingDefense.shift();setTimeout(()=>openDefenseFormation(d.atkId,d.defId),400);} return; }
+  const cap=captives[0]; // 한 명씩 처리
+  const rest=captives.slice(1);
+  // 회유 성공률: 인물 성격·충성 관련. 충의는 잘 안 넘어옴, 야심은 잘 넘어옴
+  const persona=personaOf(cap);
+  let baseRate={loyal:0.15, wise:0.45, brave:0.4, ambitious:0.65, cold:0.5, plain:0.55}[persona] || 0.45;
+  // 명군주 보너스(플레이어 세력 규모 클수록)
+  const myCities=G.cities.filter(c=>c.owner===G.playerFaction).length;
+  baseRate=Math.min(0.9, baseRate + Math.min(0.2, myCities*0.01));
+  const rate=Math.round(baseRate*100);
+  const body=`<div style="text-align:center;line-height:1.7">
+    ${genPortraitSVG(cap,72)}
+    <div style="margin:6px 0"><b style="color:${personaColor(cap)};font-size:16px">${cap.name}</b> <span class="pbadge" style="background:${personaColor(cap)}">${personaLabel(cap)}</span></div>
+    <div style="font-size:12px;color:#b8a878">무${cap.war} 통${cap.lead} 지${cap.int} 정${cap.pol}</div>
+    <div style="margin-top:10px;font-size:13px">${cap.name}을(를) 사로잡았습니다.<br>회유하여 등용하시겠습니까?</div>
+    <div style="margin-top:6px;font-size:12px;color:#dc6">회유 성공률 약 ${rate}%</div>
+    <div style="font-size:11px;color:#888;margin-top:4px">${persona==='loyal'?'충의지사 — 회유가 매우 어렵습니다':persona==='ambitious'?'야심가 — 회유가 쉬운 편입니다':''}</div>
+  </div>`;
+  const next=()=> showCaptiveScreen(rest, city);
+  showModal('⛓️ 포로', body, [
+    {label:'참수',cls:'',fn:()=>{ closeModal();
+      cap.dead=true; G.generals=G.generals.filter(g=>g.id!==cap.id);
+      log(`${cap.name}을(를) 참수했다.`, true); toast(`${cap.name} 참수`); next(); }},
+    {label:'석방',cls:'',fn:()=>{ closeModal();
+      // 석방: 인접 타 세력 도시나 재야로
+      log(`${cap.name}을(를) 석방했다.`); toast(`${cap.name} 석방`);
+      const others=G.cities.filter(c=>c.owner>=0 && c.owner!==G.playerFaction);
+      if(others.length){ const c=others[Math.floor(Math.random()*others.length)]; cap.cityId=c.id; cap.faction=c.owner; }
+      next(); }},
+    {label:'회유',cls:'primary',fn:()=>{ closeModal();
+      if(Math.random()<baseRate){
+        cap.faction=G.playerFaction; cap.cityId=city.id;
+        sfx('win'); haptic(80);
+        showModal('등용 성공!', `<div style="text-align:center;line-height:1.7">${genPortraitSVG(cap,64)}<br><b style="color:#8fd">${cap.name}</b>이(가) 그대에게 충성을 맹세했습니다!<br><span style="font-size:12px;color:#dca">"${genLine(cap,'battle')}"</span></div>`,
+          [{label:'좋다!',cls:'primary',fn:()=>{ closeModal(); refresh(); next(); }}]);
+        log(`${cap.name} 등용 성공!`, true);
+      } else {
+        sfx('lose');
+        showModal('회유 실패', `<div style="text-align:center;line-height:1.7"><b>${cap.name}</b>은(는) 뜻을 굽히지 않았습니다.<br><span style="font-size:12px;color:#c88">"${persona==='loyal'?'두 주군을 섬기지 않는다!':'나를 꺾을 순 없다.'}"</span><br><br>어찌하시겠습니까?</div>`,
+          [{label:'참수',cls:'',fn:()=>{ closeModal(); cap.dead=true; G.generals=G.generals.filter(g=>g.id!==cap.id); log(`${cap.name} 참수`, true); next(); }},
+           {label:'석방',cls:'primary',fn:()=>{ closeModal();
+             const others=G.cities.filter(c=>c.owner>=0 && c.owner!==G.playerFaction);
+             if(others.length){ const c=others[Math.floor(Math.random()*others.length)]; cap.cityId=c.id; cap.faction=c.owner; }
+             log(`${cap.name} 석방`); next(); }}]);
+      }
+    }}
+  ]);
 }
 
 function binfo(html){ document.getElementById('binfo').innerHTML=html; }
@@ -3127,8 +3193,107 @@ function endTurn(){
   }
 }
 
+/* ============================================================
+   외교 시스템
+   ============================================================ */
+function diploKey(a,b){ return a<b? a+'-'+b : b+'-'+a; }
+function getDiplo(a,b){
+  if(a===b) return {relation:100, pact:'self'};
+  const k=diploKey(a,b);
+  if(!G.diplomacy[k]) G.diplomacy[k]={relation:0, pact:'none', pactEnd:0};
+  return G.diplomacy[k];
+}
+function setPact(a,b,pact,turns){
+  const d=getDiplo(a,b); d.pact=pact; d.pactEnd=G.turn+(turns||12);
+  if(pact==='alliance') d.relation=Math.min(100,d.relation+30);
+  else if(pact==='nonaggression') d.relation=Math.min(100,d.relation+15);
+}
+function areAllied(a,b){ const d=getDiplo(a,b); return d.pact==='alliance' && G.turn<d.pactEnd; }
+function hasNonaggression(a,b){ const d=getDiplo(a,b); return (d.pact==='nonaggression'||d.pact==='alliance') && G.turn<d.pactEnd; }
+function pactLabel(p){ return {none:'중립', nonaggression:'불가침', alliance:'동맹', self:'—'}[p]||'중립'; }
+
+// 플레이어 외교 화면
+function showDiplomacy(){
+  const others=G.factions.filter((f,i)=>i!==G.playerFaction && f.alive && G.cities.some(c=>c.owner===i));
+  if(!others.length){ toast('외교할 세력이 없습니다'); return; }
+  let body=`<div style="font-size:12px;color:#b8a878;margin-bottom:8px">타 세력과의 관계. 불가침·동맹을 제안할 수 있습니다.</div>`;
+  others.forEach(f=>{
+    const fid=G.factions.indexOf(f);
+    const d=getDiplo(G.playerFaction,fid);
+    const active=(d.pact!=='none'&&G.turn<d.pactEnd);
+    const relColor=d.relation>30?'#6c6':d.relation<-30?'#e66':'#dc6';
+    const relTxt=d.relation>30?'우호':d.relation<-30?'적대':'중립';
+    const info=FACTION_INFO[fid]||{name:f.name};
+    body+=`<div class="listitem" style="flex-wrap:wrap">
+      <b style="color:#d4af37">${info.name}</b>
+      <span style="margin-left:auto;color:${relColor};font-size:12px">${relTxt}(${d.relation}) · ${active?pactLabel(d.pact)+' '+(d.pactEnd-G.turn)+'턴':'관계없음'}</span>
+      <div style="width:100%;display:flex;gap:6px;margin-top:6px">
+        <button class="dip-btn" onclick="proposePact(${fid},'nonaggression')" ${active?'disabled':''}>불가침 제안</button>
+        <button class="dip-btn" onclick="proposePact(${fid},'alliance')" ${active&&d.pact==='alliance'?'disabled':''}>동맹 제안</button>
+      </div></div>`;
+  });
+  showModal('🕊️ 외교', body, [{label:'닫기',cls:'primary',fn:closeModal}]);
+}
+function proposePact(fid, pact){
+  const d=getDiplo(G.playerFaction, fid);
+  // 수락 확률: 관계 + 상대 세력 규모(약하면 잘 받음) + 선물 여지
+  const myPower=factionPower(G.playerFaction), theirPower=factionPower(fid);
+  let rate = 0.4 + d.relation/200 + (myPower-theirPower)/(myPower+theirPower)*0.3;
+  if(pact==='alliance') rate-=0.15; // 동맹은 더 어려움
+  rate=Math.max(0.1,Math.min(0.9,rate));
+  closeModal();
+  setTimeout(()=>{
+    if(Math.random()<rate){
+      setPact(G.playerFaction,fid,pact,12);
+      sfx('win');
+      showModal('외교 성립', `<div style="text-align:center;line-height:1.7">${FACTION_INFO[fid]?FACTION_INFO[fid].name:G.factions[fid].name}와(과) <b style="color:#8fd">${pactLabel(pact)}</b>을 맺었습니다.<br><span style="font-size:12px;color:#999">${pact==='alliance'?'동맹군으로서 서로 돕습니다.':'12턴간 서로 공격하지 않습니다.'}</span></div>`,
+        [{label:'좋다',cls:'primary',fn:()=>{closeModal();showDiplomacy();}}]);
+      log(`${G.factions[fid].name}와(과) ${pactLabel(pact)} 체결!`, true);
+    } else {
+      getDiplo(G.playerFaction,fid).relation=Math.max(-100,d.relation-5);
+      sfx('lose');
+      showModal('외교 결렬', `<div style="text-align:center;line-height:1.7">${FACTION_INFO[fid]?FACTION_INFO[fid].name:G.factions[fid].name}이(가) 제안을 거절했습니다.<br><span style="font-size:12px;color:#c88">"지금은 그럴 때가 아니오."</span></div>`,
+        [{label:'물러난다',cls:'primary',fn:()=>{closeModal();showDiplomacy();}}]);
+    }
+  }, 300);
+}
+function factionPower(fid){
+  const cities=G.cities.filter(c=>c.owner===fid);
+  const troops=cities.reduce((s,c)=>s+c.troops,0);
+  const gens=G.generals.filter(g=>g.faction===fid).length;
+  return cities.length*1000 + troops*0.3 + gens*200;
+}
+// AI 외교 판단 (매턴)
+function runDiplomacyAI(){
+  const alive=G.factions.map((f,i)=>i).filter(i=>G.factions[i].alive && G.cities.some(c=>c.owner===i));
+  // pact 만료 정리
+  Object.values(G.diplomacy).forEach(d=>{ if(d.pact!=='none' && G.turn>=d.pactEnd){ d.pact='none'; } });
+  // AI끼리 약한 세력이 강한 세력에 불가침 요청 (플레이어 제외 자동)
+  for(const a of alive){
+    if(a===G.playerFaction) continue;
+    for(const b of alive){
+      if(b<=a || b===G.playerFaction) continue;
+      const d=getDiplo(a,b);
+      if(d.pact==='none' && Math.random()<0.04){
+        // 관계 좋으면 불가침
+        if(d.relation>10 || Math.random()<0.3){ setPact(a,b,'nonaggression',10); }
+      }
+      // 배신: 동맹/불가침 중이라도 강한 쪽이 약한 쪽을 낮은 확률로 파기
+      if(hasNonaggression(a,b) && Math.random()<0.02){
+        const pa=factionPower(a), pb=factionPower(b);
+        if(Math.abs(pa-pb)/(pa+pb) > 0.4){ // 세력차 크면 배신
+          d.pact='none'; d.relation-=30;
+          const strong = pa>pb?a:b;
+          if(strong===a||strong===b){ log(`${G.factions[strong].name}이(가) 맹약을 파기했다!`); }
+        }
+      }
+    }
+  }
+}
+
 function runAI(){
   G.pendingDefense=[]; // 플레이어가 방어할 전투 큐
+  runDiplomacyAI(); // 외교 판단
   for(const f of G.factions){
     if(!f.alive || f.id===G.playerFaction) continue;
     const cities=G.cities.filter(c=>c.owner===f.id);
@@ -3142,6 +3307,8 @@ function runAI(){
       // 공격 판단
       if(c.troops>6000 && Math.random()<0.25){
         let tg=c.links.map(l=>G.cities[l]).filter(t=>t.owner!==f.id);
+        // 외교: 불가침·동맹 중인 세력은 공격 안 함
+        tg=tg.filter(t=>t.owner===-1 || !hasNonaggression(f.id, t.owner));
         // 연합 규칙: 활성 중이면 동탁 외 세력끼리 불가침(동탁·공백지만 공격)
         if(G.alliance && G.alliance.active){
           if(f.id===G.alliance.target){
@@ -3209,7 +3376,7 @@ function doSave(){
   try{
     const data={ turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
       cities:G.cities, factions:G.factions, generals:G.generals, actionsLeft:G.actionsLeft,
-      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario, pendingGenerals:G.pendingGenerals,
+      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario, pendingGenerals:G.pendingGenerals, diplomacy:G.diplomacy,
       savedAt:new Date().toISOString() };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     toast('저장 완료 ('+G.year+'년 '+G.month+'월)');
@@ -3229,7 +3396,7 @@ function doLoad(){
           G.actionsLeft=d.actionsLeft||{}; G.selectedCity=null;
           G.alliance=d.alliance||{active:false,target:1,endTurn:13};
           G.eventFlags=d.eventFlags||{allianceFormed:true,allianceBroken:true};
-          G.scenario=d.scenario||'s190'; G.pendingGenerals=d.pendingGenerals||[];
+          G.scenario=d.scenario||'s190'; G.pendingGenerals=d.pendingGenerals||[]; G.diplomacy=d.diplomacy||{};
           closeModal(); closeBottom(); renderAll();
           toast('불러오기 완료 ('+G.year+'년 '+G.month+'월)');
           log('저장된 게임을 불러왔습니다.', true);
@@ -3241,7 +3408,7 @@ function autoSave(){
   try{
     const data={ turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
       cities:G.cities, factions:G.factions, generals:G.generals, actionsLeft:G.actionsLeft,
-      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario, pendingGenerals:G.pendingGenerals,
+      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario, pendingGenerals:G.pendingGenerals, diplomacy:G.diplomacy,
       savedAt:new Date().toISOString(), auto:true };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   }catch(e){}
@@ -3368,7 +3535,7 @@ function doLoadDirect(){
     G.actionsLeft=d.actionsLeft||{}; G.selectedCity=null;
     G.alliance=d.alliance||{active:false,target:1,endTurn:13};
     G.eventFlags=d.eventFlags||{allianceFormed:true,allianceBroken:true};
-    G.scenario=d.scenario||'s190'; G.pendingGenerals=d.pendingGenerals||[];
+    G.scenario=d.scenario||'s190'; G.pendingGenerals=d.pendingGenerals||[]; G.diplomacy=d.diplomacy||{};
     startBgm('field');
     renderAll(); toast('이어하기 ('+G.year+'년 '+G.month+'월)');
   }catch(e){ toast('저장 손상'); }
