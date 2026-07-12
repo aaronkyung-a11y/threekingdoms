@@ -127,6 +127,18 @@
   .tl-desc{ color:#c8b8a0; font-size:12px; line-height:1.5; margin-top:2px; }
   .terr-note{ margin-top:12px; padding:8px 10px; background:rgba(232,200,116,0.08); border:1px solid #4a3d28; border-radius:6px; font-size:12px; color:#c0b090; line-height:1.6; }
   #terrLegendBtn{ background:none; border:none; font-size:18px; cursor:pointer; }
+  .save-actions{ display:flex; gap:8px; margin-bottom:12px; }
+  .sa-btn{ flex:1; padding:10px; border:1px solid #4a3d28; border-radius:8px; background:var(--panel2); color:var(--ink); font-size:13px; cursor:pointer; }
+  .sa-btn.primary{ background:var(--gold); color:#000; border-color:var(--gold); font-weight:bold; }
+  .save-list{ display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow-y:auto; }
+  .save-slot{ display:flex; align-items:center; gap:8px; padding:10px; background:var(--panel2); border:1px solid #3a3020; border-radius:8px; }
+  .ss-main{ flex:1; cursor:pointer; min-width:0; }
+  .ss-name{ font-weight:bold; color:var(--gold); font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ss-meta{ font-size:11px; color:#b8a878; margin-top:2px; }
+  .ss-btns{ display:flex; gap:4px; flex-shrink:0; }
+  .ss-b{ background:#2a2418; border:1px solid #4a3d28; border-radius:6px; padding:6px 8px; font-size:14px; cursor:pointer; }
+  .ss-b.ss-del{ border-color:#6a3030; }
+  .save-note{ margin-top:12px; padding:8px 10px; background:rgba(232,200,116,0.08); border:1px solid #4a3d28; border-radius:6px; font-size:11px; color:#c0b090; line-height:1.6; }
   .tt-badge{ font-size:12px; padding:2px 7px; border-radius:10px; font-weight:bold; }
   .tt-cav{ background:#5a2d2d; color:#ffb3b3; }
   .tt-inf{ background:#2d4a5a; color:#b3d9ff; }
@@ -386,6 +398,7 @@
       <div class="op-ver" id="opVer"></div>
       <div class="op-poem" id="opPoem"></div>
       <div class="op-start" id="opStart" onclick="closeOpening()">▶ 천하를 도모하라</div>
+      <div id="opSaveStatus" style="margin-top:14px;font-size:11px;letter-spacing:0.5px"></div>
     </div>
   </div>
 
@@ -399,8 +412,7 @@
         <button class="tbtn" onclick="showTutorial(0)" title="도움말">❓</button>
         <button class="tbtn" onclick="showDiplomacy()" title="외교">🕊️</button>
         <button class="tbtn" onclick="showGenCodex()" title="무장 도감">📖</button>
-        <button class="tbtn" onclick="doSave()" title="저장">💾</button>
-        <button class="tbtn" onclick="doLoad()" title="불러오기">📁</button>
+        <button class="tbtn" onclick="renderSaveManager()" title="세이브 관리">💾</button>
       </div>
     </div>
     <div class="res" id="res"></div>
@@ -442,7 +454,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.26';
+const GAME_VERSION = 'v2.28';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -4253,6 +4265,95 @@ function toast(msg){
 
 /* ---------- 세이브 / 로드 ---------- */
 const SAVE_KEY='sam_gunung_save_v1';
+// ===== 다중 슬롯 + Cloudflare Worker 클라우드 세이브 =====
+// 토큰은 Worker 서버에 숨겨져 있고, 코드엔 URL+접근키만 있어 노출돼도 안전.
+// 무쌍기와 같은 Worker를 game 구분자로 공유.
+const SAVE_URL='https://game-save.aaronkyung.workers.dev/save';
+const SAVE_ACCESS_KEY='msou_a7Kx92Lp4Qw8Rz3Nv6Ty1Bs5Hd0Fg';
+const SAVE_GAME='threekingdoms';
+const SLOTS_KEY='sam_saves_v1';      // 슬롯 저장 (localStorage 폴백/캐시)
+// 현재 게임 상태를 직렬화
+function buildSaveData(){
+  return { turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
+    cities:G.cities, factions:G.factions, generals:G.generals, actionsLeft:G.actionsLeft,
+    alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario, pendingGenerals:G.pendingGenerals, diplomacy:G.diplomacy,
+    savedAt:new Date().toISOString() };
+}
+// 세이브 데이터를 현재 게임에 적용
+function applySaveData(d){
+  G.turn=d.turn; G.year=d.year; G.month=d.month; G.playerFaction=d.playerFaction;
+  G.cities=d.cities; G.factions=d.factions; G.generals=d.generals;
+  G.actionsLeft=d.actionsLeft||{}; G.selectedCity=null;
+  G.alliance=d.alliance||{active:false,target:1,endTurn:13};
+  G.eventFlags=d.eventFlags||{allianceFormed:true,allianceBroken:true};
+  G.scenario=d.scenario||'s190'; G.pendingGenerals=d.pendingGenerals||[]; G.diplomacy=d.diplomacy||{};
+}
+// 슬롯 목록 읽기/쓰기 (localStorage)
+function readSlots(){ try{ return JSON.parse(localStorage.getItem(SLOTS_KEY)||'{}'); }catch(e){ return {}; } }
+function writeSlots(obj){ try{ localStorage.setItem(SLOTS_KEY, JSON.stringify(obj)); return true; }catch(e){ return false; } }
+
+/* ---- Cloudflare Worker: 전체 슬롯을 game당 하나의 JSON으로 저장 ---- */
+let _cloudReady=false;
+async function cloudPull(){
+  if(!SAVE_URL) return null;
+  const r=await fetch(`${SAVE_URL}?game=${SAVE_GAME}&key=${encodeURIComponent(SAVE_ACCESS_KEY)}`);
+  if(!r.ok) throw new Error('load '+r.status);
+  const data=await r.json();
+  return (data && data.slots) ? data.slots : {};
+}
+async function cloudPush(slots){
+  if(!SAVE_URL) return;
+  await fetch(`${SAVE_URL}?game=${SAVE_GAME}&key=${encodeURIComponent(SAVE_ACCESS_KEY)}`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ slots }) });
+}
+// 시작 시 원격 슬롯을 로컬과 병합 (원격 우선, 최신 시각 기준)
+async function cloudSync(){
+  try{
+    const remote=await cloudPull();
+    if(remote){
+      const local=readSlots();
+      const merged={...local};
+      for(const k in remote){
+        const rt=remote[k]?.meta?.savedAt||'', lt=local[k]?.meta?.savedAt||'';
+        if(!local[k] || rt>=lt) merged[k]=remote[k]; // 원격이 더 최신이면 원격 채택
+      }
+      writeSlots(merged);
+      _cloudReady=true;
+      setSaveStatus('ok');
+      return merged;
+    }
+  }catch(e){ setSaveStatus('fail'); }
+  return null;
+}
+function setSaveStatus(state){
+  const el=document.getElementById('opSaveStatus'); if(!el) return;
+  if(state==='ok') el.innerHTML='<span style="color:#5fae6f">● 세이브 동기화됨</span>';
+  else if(state==='fail') el.innerHTML='<span style="color:#c98a4a">● 클라우드 연결 실패 · 로컬만 저장</span>';
+  else el.textContent='';
+}
+
+/* ---- 슬롯 저장/불러오기 (로컬 즉시 + 클라우드 동기화) ---- */
+function slotSave(slotKey, name){
+  const data=buildSaveData();
+  const slots=readSlots();
+  slots[slotKey]={ name:name||slots[slotKey]?.name||'세이브', data, meta:{ year:G.year, month:G.month, faction:G.playerFaction, scenario:G.scenario, savedAt:data.savedAt } };
+  writeSlots(slots);
+  toast('저장 완료 ('+G.year+'년 '+G.month+'월)');
+  // 클라우드 동기화 (전체 슬롯 업로드; 실패해도 로컬은 유지)
+  cloudPush(slots).then(()=>{ toast('☁️ 클라우드 동기화 완료'); setSaveStatus('ok'); log('세이브를 클라우드에 백업했습니다.'); })
+    .catch(e=>{ toast('클라우드 동기화 실패 (로컬 저장됨)'); setSaveStatus('fail'); });
+}
+function slotLoad(slotKey){
+  const slots=readSlots();
+  const s=slots[slotKey];
+  if(!s||!s.data){ toast('세이브가 없습니다'); return; }
+  applySaveData(s.data);
+  closeModal(); closeBottom(); renderAll();
+  toast('불러오기 완료 ('+G.year+'년 '+G.month+'월)');
+  log('세이브를 불러왔습니다.', true);
+}
+
 function doSave(){
   try{
     const data={ turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
@@ -4287,12 +4388,90 @@ function doLoad(){
 // 자동 저장 (매 턴 종료 시)
 function autoSave(){
   try{
-    const data={ turn:G.turn, year:G.year, month:G.month, playerFaction:G.playerFaction,
-      cities:G.cities, factions:G.factions, generals:G.generals, actionsLeft:G.actionsLeft,
-      alliance:G.alliance, eventFlags:G.eventFlags, scenario:G.scenario, pendingGenerals:G.pendingGenerals, diplomacy:G.diplomacy,
-      savedAt:new Date().toISOString(), auto:true };
+    const data=buildSaveData(); data.auto=true;
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   }catch(e){}
+}
+// ===== 세이브 관리 화면 =====
+function fmtSaveTime(iso){
+  if(!iso) return '';
+  try{ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch(e){ return ''; }
+}
+function factionLabel(fid){ return (FACTION_INFO[fid]&&FACTION_INFO[fid].name) || (FACTIONS[fid]&&FACTIONS[fid].name) || '?'; }
+function renderSaveManager(){
+  const slots=readSlots();
+  const keys=Object.keys(slots).sort((a,b)=>{
+    const ta=slots[a].meta?.savedAt||'', tb=slots[b].meta?.savedAt||''; return tb.localeCompare(ta);
+  });
+  let list = keys.length ? keys.map(k=>{
+    const s=slots[k]; const m=s.meta||{};
+    return `<div class="save-slot">
+      <div class="ss-main" onclick="slotLoad('${k}')">
+        <div class="ss-name">${s.name||k}</div>
+        <div class="ss-meta">${m.year||'?'}년 ${m.month||'?'}월 · ${factionLabel(m.faction)} · ${fmtSaveTime(m.savedAt)}</div>
+      </div>
+      <div class="ss-btns">
+        <button class="ss-b" onclick="event.stopPropagation(); slotOverwrite('${k}')" title="이 슬롯에 현재 상황 덮어쓰기">💾</button>
+        <button class="ss-b" onclick="event.stopPropagation(); slotRename('${k}')" title="이름 변경">✏️</button>
+        <button class="ss-b ss-del" onclick="event.stopPropagation(); slotDelete('${k}')" title="삭제">🗑️</button>
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:#888;text-align:center;padding:16px">저장된 게임이 없습니다.</div>';
+
+  const body=`
+    <div class="save-actions">
+      <button class="sa-btn primary" onclick="slotNew()">➕ 새 슬롯에 저장</button>
+      <button class="sa-btn" onclick="cloudRestore()">☁️ 클라우드에서 불러오기</button>
+    </div>
+    <div class="save-list">${list}</div>
+    <div class="save-note">💾 저장 시 자동으로 클라우드(Gist)에 백업됩니다. 캐시가 지워지거나 기기를 바꿔도 ☁️ 버튼으로 복구할 수 있습니다.</div>`;
+  showModal('💾 세이브 관리', body, [{label:'닫기',cls:'primary',fn:closeModal}]);
+}
+function slotNew(){
+  const name=prompt('세이브 이름을 입력하세요', G.year+'년 '+G.month+'월');
+  if(name===null) return;
+  const key='slot_'+Date.now();
+  slotSave(key, name.trim()||('세이브 '+G.year));
+  setTimeout(renderSaveManager, 300);
+}
+function slotOverwrite(key){
+  const slots=readSlots(); const nm=slots[key]?.name;
+  showModal('덮어쓰기', `"${nm}" 슬롯에 현재 상황을 덮어쓸까요?`,
+    [{label:'취소',cls:'',fn:renderSaveManager},
+     {label:'덮어쓰기',cls:'primary',fn:()=>{ slotSave(key, nm); setTimeout(renderSaveManager,300); }}]);
+}
+function slotRename(key){
+  const slots=readSlots(); if(!slots[key]) return;
+  const name=prompt('새 이름', slots[key].name||'');
+  if(name===null) return;
+  slots[key].name=name.trim()||slots[key].name; writeSlots(slots);
+  cloudPush(slots).catch(()=>{});
+  renderSaveManager();
+}
+function slotDelete(key){
+  const slots=readSlots(); const nm=slots[key]?.name||key;
+  showModal('삭제', `"${nm}" 세이브를 삭제할까요? (클라우드에서도 삭제됩니다)`,
+    [{label:'취소',cls:'',fn:renderSaveManager},
+     {label:'삭제',cls:'primary',fn:()=>{
+        delete slots[key]; writeSlots(slots);
+        cloudPush(slots).catch(()=>{});
+        renderSaveManager();
+     }}]);
+}
+async function cloudRestore(){
+  toast('☁️ 클라우드에서 불러오는 중...');
+  try{
+    const remote=await cloudPull();
+    if(remote){
+      const local=readSlots(); const merged={...local};
+      let n=0;
+      for(const k in remote){ merged[k]=remote[k]; n++; }
+      writeSlots(merged);
+      _cloudReady=true; setSaveStatus('ok');
+      toast(n>0?`☁️ ${n}개 세이브를 복구했습니다`:'클라우드에 세이브가 없습니다');
+    } else { toast('클라우드에 세이브가 없습니다'); }
+    renderSaveManager();
+  }catch(e){ toast('클라우드 접속 실패'); setSaveStatus('fail'); }
 }
 
 function renderAll(){ renderMap(); renderTop(); }
@@ -4317,6 +4496,7 @@ const FACTION_INFO = {
 function boot(){
   initMapControls();
   showOpening();
+  cloudSync(); // 시작 시 클라우드 세이브 동기화
 }
 // 오프닝 화면
 const OPENING_POEM = `천하대세는 나뉜 지 오래면 반드시 합하고
