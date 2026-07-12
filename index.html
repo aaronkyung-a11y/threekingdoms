@@ -858,6 +858,7 @@ function init(scenarioKey, chosenFaction){
     apt:{ cav:g[7], inf:g[8], arc:g[9] }, dead:false,
     persona: (PERSONA[g[0]] && PERSONA[g[0]].arch) || 'plain',
     exp:0, level:1, skill: assignSkill(g[1],g[2],g[3],g[4],g[0]),
+    portraitUrl: PORTRAIT_IMG[g[0]] || null,
   }));
   // 시나리오 무장 이동/사망
   if(scn.genMove){
@@ -1280,6 +1281,12 @@ function personaColor(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.color
 function personaTrait(gen){ const a=ARCHETYPES[personaOf(gen)]; return a?a.trait:''; }
 
 /* ---------- 무장 초상화 (절차적 SVG) ---------- */
+// AI 생성 초상화가 있는 무장 (assets/ 폴더의 PNG)
+const PORTRAIT_IMG = {
+  '관우':'assets/guanyu.png', '조운':'assets/zhaoyun.png', '장비':'assets/zhangfei.png',
+  '여포':'assets/lubu.png', '황충':'assets/huangzhong.png', '태사자':'assets/taishici.png',
+  '화웅':'assets/huaxiong.png', '안량':'assets/anliang.png', '장료':'assets/zhangliao.png'
+};
 // 결정론적 해시 (같은 이름 = 같은 얼굴)
 function strHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h>>>0; }
 // 세력 색 → 갑옷 색
@@ -1313,6 +1320,12 @@ function portraitFeatures(gen){
 // SVG 초상화 생성 (size px)
 function genPortraitSVG(gen, size){
   if(!gen) return '';
+  // AI 초상화가 있으면 이미지 사용 (일기토·정보창 등 모든 호출처 공통)
+  const purl = gen.portraitUrl || PORTRAIT_IMG[gen.name];
+  if(purl){
+    const s2=size||120;
+    return `<img src="${purl}" width="${s2}" height="${s2}" style="border-radius:8px;object-fit:cover;display:block" alt="${gen.name}">`;
+  }
   const f=portraitFeatures(gen);
   const s=size||120;
   // 얼굴형 path
