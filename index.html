@@ -442,7 +442,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.24';
+const GAME_VERSION = 'v2.25';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1142,6 +1142,7 @@ function init(scenarioKey, chosenFaction){
     apt:{ cav:g[7], inf:g[8], arc:g[9] }, dead:false,
     persona: (PERSONA[g[0]] && PERSONA[g[0]].arch) || 'plain',
     exp:0, level:1, skill: assignSkill(g[1],g[2],g[3],g[4],g[0]),
+    loyalty: initLoyalty(g[0], (PERSONA[g[0]]&&PERSONA[g[0]].arch)||'plain'),
   }));
   // 시나리오 무장 이동/사망
   if(scn.genMove){
@@ -1517,6 +1518,7 @@ function selectCity(id){
       <div class="cmd-btn ${c.gold<50?'disabled':dis}" onclick="cmdOrder()">🛡️치안${sub(orderEff,50)}</div>
       <div class="cmd-btn ${c.gold<200?'disabled':dis}" onclick="cmdConscript()">⚔️징병${subC(conscript,200)}</div>
       <div class="cmd-btn ${c.gold<80?'disabled':dis}" onclick="cmdTrain()">🏋️훈련${sub(trainEff,80)}</div>
+      <div class="cmd-btn ${c.gold<300?'disabled':dis}" onclick="cmdPersuade()">🤝회유<span class="cmd-eff"><span class="cmd-cost">(300금)</span></span></div>
       <div class="cmd-btn" onclick="cmdAttack()">🔥출병·공격</div>
     </div>${synergyNote}${acted?'<div class="acted-note">이번 달 내정 명령을 사용했습니다 (출병은 가능)</div>':''}`;
   }
@@ -1861,7 +1863,7 @@ function showGenInfo(genId){
       <div style="color:#b8a878;font-size:13px">무력 <b style="color:var(--gold)">${g.war}</b> · 통솔 <b style="color:var(--gold)">${g.lead}</b> · 지력 <b style="color:var(--gold)">${g.int}</b> · 정치 <b style="color:var(--gold)">${g.pol}</b></div>
       <div style="color:#b8a878;font-size:13px;margin-top:4px">병과: ${aptRow}</div>
       ${g.skill&&g.skill!=='none'?`<div style="color:#8fd;font-size:13px;margin-top:4px">특기: ${SKILLS[g.skill].icon} <b>${SKILLS[g.skill].name}</b> <span style="font-size:11px;color:#999">${SKILLS[g.skill].desc}</span></div>`:''}
-      <div style="color:#b8a878;font-size:12px;margin-top:4px">Lv.${g.level||1} <span style="color:#666">(경험치 ${g.exp||0}/${(g.level||1)*100})</span></div>
+      <div style="color:#b8a878;font-size:12px;margin-top:4px">Lv.${g.level||1} <span style="color:#666">(경험치 ${g.exp||0}/${(g.level||1)*100})</span>${g.faction>=0 && g.name!==factionLordName(g.faction) ? ` · 충성 <b style="color:${loyaltyColor(effLoyalty(g))}">${effLoyalty(g)}</b>` : (g.faction>=0?` · <span style="color:#6cc06c">군주</span>`:'')}</div>
     </div>
     <div style="font-size:13px;color:#b8a878;margin-bottom:6px">🎭 <b>${arch.label}</b> — ${arch.trait}</div>
     ${rels.length? `<div style="font-size:13px;color:#b8a878">🤝 관계: ${rels.join(', ')}</div>` : '<div style="font-size:12px;color:#666">알려진 상성 없음</div>'}
@@ -1874,6 +1876,47 @@ function showGenInfo(genId){
 /* ---------- 내정 커맨드 (삼국지 2식) ---------- */
 function useAction(id){ G.actionsLeft[id]=false; }
 function bestPol(id){ const gs=G.generals.filter(g=>g.cityId===id); return gs.length?Math.max(...gs.map(g=>g.pol)):40; }
+// ===== 충성도 시스템 =====
+// 성격별 초기 충성도
+function initLoyalty(name, persona){
+  const base={loyal:88, wise:78, brave:75, plain:72, cold:66, ambitious:55}[persona] || 72;
+  return Math.max(30,Math.min(100, base + Math.floor(Math.random()*10-5)));
+}
+// 두 무장의 관계 조회
+function relationBetween(nameA, nameB){
+  for(const r of RELATIONS){
+    if((r.a===nameA&&r.b===nameB)||(r.a===nameB&&r.b===nameA)) return r;
+  }
+  return null;
+}
+// 무장의 세력 내 주군 이름 (세력 인덱스 → 군주). 세력명이 곧 군주인 구조 활용
+function factionLordName(fid){ return FACTIONS[fid] ? FACTIONS[fid].name : null; }
+// 관계 기반 충성 보정: 같은 세력에 주군/의형제가 함께 있으면 충성↑
+function loyaltyRelationBonus(g){
+  if(g.faction<0) return 0;
+  let bonus=0;
+  const sameFaction=G.generals.filter(x=>x.faction===g.faction && !x.dead && x.id!==g.id);
+  // 군주 본인이면 항상 충성 만점 취급
+  const lordName=factionLordName(g.faction);
+  if(g.name===lordName) return 100;
+  for(const other of sameFaction){
+    const rel=relationBetween(g.name, other.name);
+    if(!rel) continue;
+    if(rel.type==='sworn') bonus+=rel.bond;        // 의형제: 강한 결속
+    else if(rel.type==='lord' && other.name===lordName) bonus+=rel.bond; // 주군과 함께
+    else if(rel.type==='lord') bonus+=Math.floor(rel.bond*0.5);
+  }
+  return Math.min(20,bonus);
+}
+// 무장의 유효 충성도 (기본 loyalty + 관계 보정, 캡 100)
+function effLoyalty(g){
+  if(g.faction<0) return 50;
+  const lordName=factionLordName(g.faction);
+  if(g.name===lordName) return 100;
+  return Math.max(0,Math.min(100,(g.loyalty||70)+loyaltyRelationBonus(g)));
+}
+// 충성도 색상
+function loyaltyColor(v){ return v>=80?'#6cc06c':v>=55?'#d4c060':v>=35?'#e0955a':'#e05a5a'; }
 // 내정 유효 정치력: 최고 정치력 무장이 주력(100%), 나머지 무장은 정치력의 40%를 보조 기여 (체감형 합산)
 function civilPower(id){
   const gs=G.generals.filter(g=>g.cityId===id && g.faction===G.cities[id].owner && !g.dead);
@@ -1937,6 +1980,64 @@ function tryRecruitFree(genId){
       }
     }}
   ]);
+}
+// 적 무장 회유(引き抜き): 인접 적 도시의 충성 낮은 무장을 금으로 빼오기
+function cmdPersuade(){
+  const c=G.cities[G.selectedCity];
+  if(c.owner!==G.playerFaction){ return; }
+  if(G.actionsLeft[c.id]===false){ toast('이번 달 행동을 이미 했습니다'); return; }
+  if(c.gold<300){ toast('회유에는 300금이 필요합니다'); return; }
+  // 인접 적 도시의 무장 목록 (군주 제외)
+  const targets=[];
+  c.links.forEach(l=>{
+    const nc=G.cities[l];
+    if(nc.owner<0 || nc.owner===G.playerFaction) return;
+    const lordName=factionLordName(nc.owner);
+    G.generals.filter(g=>g.cityId===nc.id && g.faction===nc.owner && !g.dead && g.name!==lordName).forEach(g=>{
+      targets.push({g, city:nc});
+    });
+  });
+  if(!targets.length){ toast('인접 적 도시에 회유할 무장이 없습니다'); return; }
+  // 충성 낮은 순 정렬
+  targets.sort((a,b)=>effLoyalty(a.g)-effLoyalty(b.g));
+  let rows=targets.slice(0,12).map(({g,city})=>{
+    const eff=effLoyalty(g);
+    // 성공률: 충성 낮을수록·내 정치 높을수록 높음
+    const myBestPol=Math.max(40,...G.generals.filter(x=>x.cityId===c.id&&x.faction===G.playerFaction).map(x=>x.pol));
+    let rate=Math.round(Math.max(5,Math.min(85, (60-eff) + (myBestPol-60)*0.3 )));
+    const canDo = eff<70; // 충성 너무 높으면 시도 불가
+    return `<div class="listitem" style="${canDo?'':'opacity:.4;pointer-events:none'}" onclick="closeModal(); doPersuade(${g.id},${c.id})">
+      <b style="color:#d4af37">${g.name}</b>
+      <span style="font-size:11px;color:#aaa;margin-left:6px">${city.name}·${FACTIONS[g.faction].name}</span>
+      <span style="margin-left:auto;font-size:12px;color:${loyaltyColor(eff)}">충성 ${eff}${canDo?` · 성공률 ${rate}%`:' · 확고'}</span>
+    </div>`;
+  }).join('');
+  showModal('🤝 무장 회유 (300금)',
+    `<p style="font-size:12px;color:#b8a878;margin-bottom:8px">인접 적 도시의 무장을 회유합니다. 충성이 낮을수록 성공률이 높습니다. 군주와 의형제·주종으로 맺어진 무장은 회유가 어렵습니다.</p>${rows}`,
+    [{label:'그만두기',cls:'',fn:closeModal}]);
+}
+function doPersuade(genId, cityId){
+  const g=G.generals.find(x=>x.id===genId); const c=G.cities[cityId];
+  if(!g||!c) return;
+  if(c.gold<300){ toast('금이 부족합니다'); return; }
+  c.gold-=300; useAction(c.id);
+  const eff=effLoyalty(g);
+  const myBestPol=Math.max(40,...G.generals.filter(x=>x.cityId===c.id&&x.faction===G.playerFaction).map(x=>x.pol));
+  let rate=Math.max(5,Math.min(85, (60-eff) + (myBestPol-60)*0.3 ))/100;
+  if(Math.random()<rate){
+    g.faction=G.playerFaction; g.cityId=c.id; g.loyalty=62;
+    sfx('win'); haptic(80);
+    showModal('회유 성공!', `<div style="text-align:center;line-height:1.7">${genPortraitSVG(g,64)}<br><b style="color:#8fd">${g.name}</b>이(가) 그대에게 귀순했습니다!<br><span style="font-size:12px;color:#dca">"새 주군을 섬기겠소."</span></div>`,
+      [{label:'좋다!',cls:'primary',fn:()=>{ closeModal(); refresh(); selectCity(c.id); }}]);
+    log(`🤝 적장 ${g.name}을(를) 회유했다!`, true);
+  } else {
+    // 실패 시 그 무장 충성 소폭 상승(경계)
+    g.loyalty=Math.min(100,(g.loyalty||70)+5);
+    sfx('lose');
+    showModal('회유 실패', `<div style="text-align:center;line-height:1.7"><b>${g.name}</b>은(는) 제안을 거절했습니다.<br><span style="font-size:12px;color:#c88">"불충한 짓은 하지 않겠소." (경계심이 높아졌다)</span></div>`,
+      [{label:'아쉽군',cls:'primary',fn:()=>{ closeModal(); refresh(); selectCity(c.id); }}]);
+    log(`${g.name} 회유 실패.`);
+  }
 }
 function cmdDevelop(type){
   const c=G.cities[G.selectedCity]; if(c.gold<100){toast('금이 부족합니다');return;}
@@ -3779,7 +3880,8 @@ function checkDebutGenerals(){
     const city=G.cities[targetCity];
     const g={ id:p.id, name:p.name, war:p.war, lead:p.lead, int:p.int, pol:p.pol,
       faction: wasFree ? -1 : city.owner, cityId:targetCity, apt:p.apt, persona:p.persona, dead:false,
-      exp:0, level:1, skill: assignSkill(p.war,p.lead,p.int,p.pol,p.name) };
+      exp:0, level:1, skill: assignSkill(p.war,p.lead,p.int,p.pol,p.name),
+      loyalty: initLoyalty(p.name, p.persona) };
     G.generals.push(g);
     newcomers.push({name:p.name, city:city.name, faction:g.faction});
   });
@@ -3802,6 +3904,47 @@ function checkDebutGenerals(){
   }
 }
 
+// 월간 충성도 변동 + 배신/모반
+function processLoyalty(){
+  const defected=[];
+  for(const g of G.generals){
+    if(g.dead || g.faction<0) continue;
+    const lordName=factionLordName(g.faction);
+    if(g.name===lordName) continue; // 군주는 제외
+    if(g.loyalty===undefined) g.loyalty=70;
+    // 대우: 충성이 35 이상일 때만 서서히 회복(주군 곁이면 더 빨리). 아주 낮으면 스스로 회복 안 됨
+    const rb=loyaltyRelationBonus(g);
+    if(g.loyalty>=35 && g.loyalty<70) g.loyalty=Math.min(70, g.loyalty + (rb>0?2:1));
+    // 무직(도시 없음)·야심가는 소폭 하락
+    if(g.persona==='ambitious' && Math.random()<0.3) g.loyalty=Math.max(15,g.loyalty-1);
+    // 배신/이탈 판정: 유효 충성 35 미만이면 확률적으로 이탈
+    const eff=effLoyalty(g);
+    if(eff<35){
+      const risk=(35-eff)/70 * (g.persona==='ambitious'?1.8:1.0);
+      if(Math.random()<risk){
+        // 인접 최강 적 세력으로 이탈하거나 재야화
+        const c=G.cities[g.cityId];
+        let target=-1;
+        if(c){
+          const adjFactions=c.links.map(l=>G.cities[l].owner).filter(o=>o>=0 && o!==g.faction);
+          if(adjFactions.length){ target=adjFactions[Math.floor(Math.random()*adjFactions.length)]; }
+        }
+        const oldFac=g.faction;
+        g.faction=target; g.loyalty=target<0?50:60;
+        defected.push({name:g.name, from:oldFac, to:target});
+      }
+    }
+  }
+  // 플레이어 세력 이탈은 알림
+  for(const d of defected){
+    if(d.from===G.playerFaction){
+      const dest = d.to<0?'재야로 떠났습니다':`${FACTIONS[d.to].name} 세력으로 이탈했습니다`;
+      log(`⚠️ ${d.name}이(가) 불만을 품고 ${dest}!`, true);
+    } else if(d.to===G.playerFaction){
+      // (회유가 아닌 자발적 귀순은 드물게)
+    }
+  }
+}
 function endTurn(){
   // 세금/수확 결산
   for(const c of G.cities){
@@ -3816,6 +3959,8 @@ function endTurn(){
     // 치안 자연 변동
     if(c.order<50) c.order=Math.max(0,c.order-1);
   }
+  // 월간 충성도 변동 + 배신/모반
+  processLoyalty();
   // AI 세력 행동
   runAI();
   // 날짜 진행
