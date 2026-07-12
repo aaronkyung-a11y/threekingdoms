@@ -158,6 +158,9 @@
   .btn{ background:var(--panel2); border:1px solid var(--gold); color:var(--ink); padding:8px 16px;
     border-radius:6px; cursor:pointer; font-size:13px; }
   .btn.primary{ background:var(--gold); color:#000; font-weight:bold; }
+  .btn.duel-btn{ background:linear-gradient(#c0392b,#96281b); border-color:#e0603a; color:#fff; font-weight:bold;
+    box-shadow:0 0 10px #c0392b60; animation:duelPulse 1.4s ease-in-out infinite; }
+  @keyframes duelPulse{ 0%,100%{box-shadow:0 0 8px #c0392b60} 50%{box-shadow:0 0 16px #e0603a90} }
 
   .listitem{ display:flex; align-items:center; gap:8px; padding:8px; background:var(--panel2);
     border-radius:5px; margin-bottom:6px; cursor:pointer; }
@@ -1759,7 +1762,7 @@ function startBattle(atkId, defId, atkPicks, defPicks){
   let intro = sideTxt;
   if(cry) intro += `<b style="color:${personaColor(leadUnit.gen)}">${leadUnit.name}: "${cry}"</b><br>`;
   if(B.allyBondMsg) intro += `<span style="color:#8fd">🤝 ${B.allyBondMsg}</span><br>`;
-  intro += '부대 선택 → 이동/공격. <b>🐎기병>🛡️보병>🏹궁병</b> 상성.';
+  intro += '부대 선택 → 이동/공격. 무장끼리 인접하면 <b style="color:#f88">⚔️ 일기토</b> 버튼으로 도전!';
   binfo(intro);
   sfx('start'); haptic(30);
   setBgmMode('battle'); // 전투 음악
@@ -1857,7 +1860,9 @@ function onUnitClick(uid){
     B.sel=u; sfx('select'); haptic(15); renderBattle();
     const tt=unitTT(u);
     const aptTxt=u.gen?` (${tt.name}적성 ${aptLabel(u.gen,tt.key)})`:'';
-    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격`);
+    const dtgt=duelTargetFor(u);
+    const duelHint = dtgt ? `<br><span style="color:#f88">⚔️ ${dtgt.name}에게 일기토 가능! (아래 버튼)</span>` : '';
+    binfo(`<b style="color:#d4af37">${u.name}</b> ${tt.icon}${tt.name}${aptTxt} · 병력 ${u.troops} · 사기 ${u.morale}<br>이동력 ${tt.move}·사거리 ${tt.range} | 노란칸=이동, 빨간칸=공격${duelHint}`);
     renderBattleCmd();
   } else {
     if(B.sel && canAttackTo(B.sel,{col:u.col,row:u.row})){
@@ -1885,6 +1890,13 @@ function onHexClick(col,row){
 function renderBattleCmd(){
   const cmd=document.getElementById('bcmd'); cmd.innerHTML='';
   if(B.sel && B.phase===B.playerSide){
+    // 일기토 버튼 (인접 적 무장이 있고 조건 충족 시)
+    const dtgt=duelTargetFor(B.sel);
+    if(dtgt){
+      const duel=document.createElement('button'); duel.className='btn duel-btn'; duel.textContent='⚔️ 일기토';
+      duel.onclick=manualDuel;
+      cmd.appendChild(duel);
+    }
     const wait=document.createElement('button'); wait.className='btn'; wait.textContent='대기(행동종료)';
     wait.onclick=()=>{ B.sel.acted=true; B.sel.moved=true; B.sel=null; renderBattle(); checkPhaseEnd(); renderBattleCmd(); binfo('부대를 선택하세요.'); };
     cmd.appendChild(wait);
@@ -1900,31 +1912,67 @@ function renderBattleCmd(){
 }
 
 // 일기토 조건 확인 후 실행 → 이후 일반 공격
-function maybeDuelThenAttack(atkU, defU){
-  // 양쪽 무장 존재 + 둘 다 무력 70+ + 인접(1칸) + 30% 확률
-  const canDuel = atkU.gen && defU.gen && atkU.war>=70 && defU.war>=70
+// 일기토 가능 여부 (양쪽 무장 + 무력 65+ + 인접 + 미실행)
+function canDuelUnits(atkU, defU){
+  return atkU && defU && atkU.gen && defU.gen
+    && atkU.war>=65 && defU.war>=65
     && hexDist(atkU,defU)===1 && !B.duelDone;
-  if(canDuel && Math.random()<0.35){
-    const rel = relationBetween(atkU.name, defU.name);
-    let relLine='';
-    if(rel){
-      if(rel.type==='foe') relLine=`<div style="color:#f66;font-size:13px;margin-bottom:6px">⚔ 숙적! 서로 물러설 수 없다 (투지 상승)</div>`;
-      else if(rel.type==='rival') relLine=`<div style="color:#fc6;font-size:13px;margin-bottom:6px">🔥 숙명의 라이벌</div>`;
-      else if(rel.type==='sworn'||rel.type==='lord') relLine=`<div style="color:#8fd;font-size:13px;margin-bottom:6px">${REL_LABEL[rel.type]} 관계… 창을 겨누는가</div>`;
-    }
-    const cry = genLine(atkU.gen,'duel');
-    showModal('⚔️ 일기토!',
-      `<div style="text-align:center">
-        ${relLine}
-        <b style="color:${personaColor(atkU.gen)}">${atkU.name}</b> <span style="font-size:11px;color:#999">${personaLabel(atkU.gen)}</span> (무력 ${atkU.war})<br>
-        <span style="color:#d4af37;font-size:20px">VS</span><br>
-        <b style="color:${personaColor(defU.gen)}">${defU.name}</b> <span style="font-size:11px;color:#999">${personaLabel(defU.gen)}</span> (무력 ${defU.war})<br>
-        <div style="color:#dca;font-style:italic;margin:8px 0">"${cry}"</div>
-        일기토를 걸어 도전하시겠습니까?<br>
-        <span style="font-size:12px;color:#999">승리 시 적에 큰 타격, 패배 시 아군 피해.</span>
-      </div>`,
-      [{label:'일반 공격',cls:'',fn:()=>{ closeModal(); doAttack(atkU,defU); }},
-       {label:'⚔️ 도전!',cls:'primary',fn:()=>{ closeModal(); doDuel(atkU,defU); }}]);
+}
+// 현재 선택 부대가 일기토 걸 수 있는 인접 적 (있으면 반환)
+function duelTargetFor(u){
+  if(!u || !u.gen || u.acted || u.war<65 || B.duelDone) return null;
+  const foes=enemyUnits().filter(e=>e.gen && e.war>=65 && hexDist(u,e)===1);
+  return foes.length? foes[0] : null;
+}
+// 일기토 제안 모달 (자동/수동 공용)
+function promptDuel(atkU, defU){
+  const rel = relationBetween(atkU.name, defU.name);
+  let relLine='';
+  if(rel){
+    if(rel.type==='foe') relLine=`<div style="color:#f66;font-size:13px;margin-bottom:6px">⚔ 숙적! 서로 물러설 수 없다 (투지 상승)</div>`;
+    else if(rel.type==='rival') relLine=`<div style="color:#fc6;font-size:13px;margin-bottom:6px">🔥 숙명의 라이벌</div>`;
+    else if(rel.type==='sworn'||rel.type==='lord') relLine=`<div style="color:#8fd;font-size:13px;margin-bottom:6px">${REL_LABEL[rel.type]} 관계… 창을 겨누는가</div>`;
+  }
+  const cry = genLine(atkU.gen,'duel');
+  showModal('⚔️ 일기토!',
+    `<div style="text-align:center">
+      ${relLine}
+      <div style="display:flex;justify-content:center;gap:10px;align-items:center;margin-bottom:8px">
+        <div>${genPortraitSVG(atkU.gen,72)}<div style="color:${personaColor(atkU.gen)};font-weight:bold">${atkU.name}</div><div style="font-size:11px;color:#999">무력 ${atkU.war}</div></div>
+        <span style="color:#d4af37;font-size:22px">⚔</span>
+        <div>${genPortraitSVG(defU.gen,72)}<div style="color:${personaColor(defU.gen)};font-weight:bold">${defU.name}</div><div style="font-size:11px;color:#999">무력 ${defU.war}</div></div>
+      </div>
+      <div style="color:#dca;font-style:italic;margin:8px 0">"${cry}"</div>
+      일기토를 걸어 도전하시겠습니까?<br>
+      <span style="font-size:12px;color:#999">승리 시 적에 큰 타격, 패배 시 아군 피해.</span>
+    </div>`,
+    [{label:'일반 공격',cls:'',fn:()=>{ closeModal(); doAttack(atkU,defU); }},
+     {label:'⚔️ 도전!',cls:'primary',fn:()=>{ closeModal(); doDuel(atkU,defU); }}]);
+}
+// 수동 일기토 (버튼): 인접 적이 여럿이면 선택
+function manualDuel(){
+  const u=B.sel;
+  if(!u){ binfo('먼저 아군 무장 부대를 선택하세요.'); return; }
+  if(u.acted){ binfo('이미 행동한 부대입니다.'); return; }
+  if(B.duelDone){ binfo('이 전투에서는 이미 일기토가 벌어졌습니다.'); return; }
+  if(!u.gen || u.war<65){ binfo('이 부대의 장수는 일기토를 걸 수 없습니다 (무력 65 이상 필요).'); return; }
+  const foes=enemyUnits().filter(e=>e.gen && e.war>=65 && hexDist(u,e)===1);
+  if(!foes.length){ binfo('인접한 적 무장(무력 65+)이 없습니다. 옆에 붙어야 일기토가 가능합니다.'); return; }
+  if(foes.length===1){ promptDuel(u, foes[0]); return; }
+  // 여러 명이면 선택
+  let body=`<p style="margin-bottom:8px;color:#b8a878">일기토 상대를 선택하세요.</p>`;
+  foes.forEach(f=>{
+    body+=`<div class="listitem" onclick="closeModal(); promptDuel(B.sel, B.units.find(x=>x.id===${f.id}))">
+      <b style="color:${personaColor(f.gen)}">${f.name}</b>
+      <span style="margin-left:auto;color:#b8a878">무력 ${f.war} · ${personaLabel(f.gen)}</span></div>`;
+  });
+  showModal('일기토 상대', body, [{label:'취소',cls:'',fn:closeModal}]);
+}
+
+function maybeDuelThenAttack(atkU, defU){
+  // 자동 제안: 조건 충족 시 확률적으로 일기토 창
+  if(canDuelUnits(atkU,defU) && Math.random()<0.5){ // 확률 35%→50%
+    promptDuel(atkU, defU);
   } else {
     doAttack(atkU,defU);
   }
