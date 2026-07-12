@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.33';
+const GAME_VERSION = 'v2.34';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2545,6 +2545,31 @@ function bgmDrum(start,gain,kind){
   src.connect(f); f.connect(g); g.connect(BGM.master||ctx.destination); src.start(start);
   BGM.nodes.push(src);
 }
+// === MP3 BGM (있으면 합성음 대신 실제 음원 재생) ===
+const BGM_MP3 = {
+  title: 'bgm/title.mp3',
+  // 추가 예정: field, battle, victory ...
+};
+let bgmAudio = null; // <audio> 엘리먼트 (MP3용)
+function stopMp3(){
+  if(bgmAudio){ try{ bgmAudio.pause(); }catch(e){} bgmAudio.currentTime=0; }
+}
+function playMp3(mode){
+  const url=BGM_MP3[mode]; if(!url) return false;
+  if(!bgmAudio){
+    bgmAudio=new Audio();
+    bgmAudio.loop=true; bgmAudio.preload='auto';
+    bgmAudio.volume=0.55;
+  }
+  // 같은 곡 이미 재생 중이면 유지
+  const full=url;
+  if(bgmAudio.dataset && bgmAudio.dataset.mode===mode && !bgmAudio.paused) return true;
+  stopMp3();
+  bgmAudio.src=url;
+  if(bgmAudio.dataset) bgmAudio.dataset.mode=mode;
+  bgmAudio.play().catch(e=>{ /* 자동재생 차단 시 다음 제스처에서 재생 */ });
+  return true;
+}
 // 곡 구성: 멜로디 + 화음 + 베이스 + 드럼을 층으로. 각 모드는 코드 진행 기반.
 // mel: 멜로디 음(펜타 인덱스, -99=쉼표), chord: 각 박마다 울릴 화음(펜타 인덱스 배열), 
 const BGM_PATTERNS = {
@@ -2590,11 +2615,20 @@ const BGM_PATTERNS = {
   },
 };
 function startBgm(mode){
-  if(!FX.enabled) { BGM.mode=mode; return; }
+  if(!FX.enabled) { BGM.mode=mode; stopMp3(); return; }
+  BGM.mode=mode;
+  // MP3가 등록된 모드면 실제 음원 재생 (합성음 스케줄러는 정지)
+  if(BGM_MP3[mode]){
+    stopSynthBgm();
+    playMp3(mode);
+    return;
+  }
+  // 그 외에는 기존 합성음
+  stopMp3();
   const ctx=ensureAudio(); if(!ctx) return;
-  if(BGM.mode===mode && BGM.timer) return; // 이미 재생 중
-  stopBgm();
-  BGM.mode=mode; BGM.step=0;
+  if(BGM.synthMode===mode && BGM.timer) return; // 이미 재생 중
+  stopSynthBgm();
+  BGM.synthMode=mode; BGM.step=0;
   if(!BGM.master){ BGM.master=ctx.createGain(); BGM.master.gain.value=0.55; BGM.master.connect(ctx.destination); }
   if(!BGM.reverb){ BGM.reverb=makeReverb(ctx); const rg=ctx.createGain(); rg.gain.value=0.5; BGM.reverb.connect(rg); rg.connect(BGM.master); }
   BGM.nextTime=ctx.currentTime+0.15;
@@ -2605,24 +2639,26 @@ function startBgm(mode){
       const s=BGM.step, t=BGM.nextTime, pat=BGM_PATTERNS[BGM.mode]||BGM_PATTERNS.field;
       const mlen=pat.mel.length;
       const mi=pat.mel[s%mlen];
-      // 멜로디
       if(mi>-90) bgmVoice(noteFreq(PENTA,mi), t, pat.tempo*1.4, pat.melGain, pat.melInst);
-      // 화음 (코드)
       if(pat.chords){ const ch=pat.chords[s%pat.chords.length];
         if(ch){ ch.forEach(ci=> bgmVoice(noteFreq(PENTA,ci), t, pat.tempo*2.2, pat.chordGain, pat.chordInst)); } }
-      // 베이스
       if(pat.bassEach && s%pat.bassEach===0){ const bi=pat.bass[Math.floor(s/pat.bassEach)%pat.bass.length];
         if(bi>-90) bgmVoice(noteFreq(PENTA_LOW,bi), t, pat.tempo*3, pat.bassGain, pat.bassInst); }
-      // 드럼
       if(pat.drumEach && s%pat.drumEach===0) bgmDrum(t, pat.drumKind==='big'?0.22:0.14, pat.drumKind);
       BGM.step++; BGM.nextTime += pat.tempo;
     }
   };
   BGM.timer=setInterval(schedule, 130); schedule();
 }
-function stopBgm(){
+// 합성음만 정지 (MP3는 유지)
+function stopSynthBgm(){
   if(BGM.timer){ clearInterval(BGM.timer); BGM.timer=null; }
   BGM.nodes.forEach(n=>{ try{n.stop();}catch(e){} }); BGM.nodes=[];
+  BGM.synthMode=null;
+}
+function stopBgm(){
+  stopSynthBgm();
+  stopMp3();
 }
 function setBgmMode(mode){ if(BGM.mode!==mode) startBgm(mode); }
 
