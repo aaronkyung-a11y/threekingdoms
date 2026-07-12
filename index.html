@@ -169,6 +169,8 @@
   .op-sub{ font-size:20px; color:#b8935a; letter-spacing:10px; opacity:0; animation:opFade 1.2s ease .3s forwards; }
   .op-title{ font-size:64px; font-weight:900; color:#e8c874; letter-spacing:8px; margin:6px 0 24px;
     text-shadow:0 0 30px #d4af3760, 0 4px 12px #000; opacity:0; animation:opFade 1.4s ease 1s forwards; }
+  .op-ver{ font-size:13px; color:#8a7658; letter-spacing:2px; margin:-14px 0 18px; }
+  .tb-ver{ font-size:10px; color:#8a7658; margin-left:6px; font-weight:normal; letter-spacing:0.5px; }
   .op-poem{ font-size:15px; color:#c8b088; line-height:2; min-height:120px; font-style:italic;
     white-space:pre-line; opacity:0; animation:opFade 1.6s ease 2s forwards; }
   .op-start{ margin-top:28px; display:inline-block; padding:14px 30px; border:2px solid var(--gold);
@@ -367,6 +369,7 @@
     <div id="openingInner">
       <div class="op-sub">群雄割據</div>
       <div class="op-title">삼국지</div>
+      <div class="op-ver" id="opVer"></div>
       <div class="op-poem" id="opPoem"></div>
       <div class="op-start" id="opStart" onclick="closeOpening()">▶ 천하를 도모하라</div>
     </div>
@@ -375,7 +378,7 @@
 <div id="app">
   <div id="topbar">
     <div class="tb-row1">
-      <span class="title">群雄割據</span>
+      <span class="title">群雄割據<span class="tb-ver" id="tbVer"></span></span>
       <span class="date" id="date">190년 1월</span>
       <span id="allianceBadge"></span>
       <div class="topbtns">
@@ -421,10 +424,16 @@
 
 <script>
 /* ============================================================
-   삼국지 群雄割據 v0.1
+   삼국지 群雄割據
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
+const GAME_VERSION = 'v2.18';
+function paintVersion(){
+  var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
+  var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
+}
+document.addEventListener('DOMContentLoaded', paintVersion);
 
 const G = {
   turn: 1, year: 190, month: 1,
