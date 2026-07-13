@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.38';
+const GAME_VERSION = 'v2.39';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1525,7 +1525,9 @@ function selectCity(id){
   const acted = G.actionsLeft[id]===false;
 
   const bottom = document.getElementById('bottom');
+  const bWasHidden = bottom.classList.contains('hidden');
   bottom.classList.remove('hidden');
+  if(bWasHidden) sfx('menuOpen'); // 패널이 새로 열릴 때만
 
   // 무장 리스트 (병과 적성 + 성격) — 정렬 지원
   const sortKey = G.genSortKey || 'default';
@@ -1620,7 +1622,7 @@ function selectCity(id){
 }
 function toggleGens(){ genExpanded=!genExpanded; if(G.selectedCity!=null) selectCity(G.selectedCity); }
 function setGenSort(k){ G.genSortKey = (G.genSortKey===k)?'default':k; if(G.selectedCity!=null) selectCity(G.selectedCity); }
-function closeBottom(){ document.getElementById('bottom').classList.add('hidden'); G.selectedCity=null; }
+function closeBottom(){ const el=document.getElementById('bottom'); if(!el.classList.contains('hidden')) sfx('menuClose'); el.classList.add('hidden'); G.selectedCity=null; }
 
 /* ---------- 병과 시스템 ---------- */
 // 무장 능력치 기반 주병과 결정 (저장된 값 우선)
@@ -2407,6 +2409,8 @@ function bloodlessCapture(atkId, defId){
 
 /* ---------- 모달 ---------- */
 function showModal(title, body, buttons){
+  const modal=document.getElementById('modal');
+  const wasHidden=modal.classList.contains('hidden');
   document.getElementById('modal-title').textContent=title;
   document.getElementById('modal-body').innerHTML=body;
   const foot=document.getElementById('modal-foot'); foot.innerHTML='';
@@ -2414,9 +2418,14 @@ function showModal(title, body, buttons){
     const btn=document.createElement('button'); btn.className='btn '+(b.cls||''); btn.textContent=b.label;
     btn.onclick=b.fn; foot.appendChild(btn);
   });
-  document.getElementById('modal').classList.remove('hidden');
+  modal.classList.remove('hidden');
+  if(wasHidden) sfx('menuOpen'); // 새로 열릴 때만
 }
-function closeModal(){ document.getElementById('modal').classList.add('hidden'); }
+function closeModal(){
+  const modal=document.getElementById('modal');
+  if(!modal.classList.contains('hidden')) sfx('menuClose');
+  modal.classList.add('hidden');
+}
 
 /* ============================================================
    효과음(WebAudio) · 햅틱 · 시각 이펙트 엔진
@@ -2461,6 +2470,8 @@ function sfx(type){
     case 'lose':   [400,330,262,196].forEach((f,i)=>setTimeout(()=>mk(f,0.28,'sawtooth',0.13),i*140)); break;
     case 'start':  mk(300,0.15,'sawtooth',0.12,500); setTimeout(()=>noise(0.3,0.15),120); break;
     case 'destroy':noise(0.4,0.35); mk(70,0.4,'sawtooth',0.18,40); break;
+    case 'menuOpen':  mk(440,0.10,'sine',0.07,740); setTimeout(()=>mk(660,0.09,'sine',0.05,880),60); break; // 펼쳐지는 상승음
+    case 'menuClose': mk(660,0.10,'sine',0.06,420); setTimeout(()=>mk(440,0.09,'sine',0.05,330),55); break; // 접히는 하강음
   }
 }
 function haptic(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms); }catch(e){} } }
