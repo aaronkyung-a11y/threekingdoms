@@ -490,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.46';
+const GAME_VERSION = 'v2.47';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -3605,17 +3605,31 @@ function doDuel(atkU, defU){
     else { dScore++; rounds.push(`${i+1}합: ${defU.name} 우세`); roundWin.push('d'); }
   }
   const win = aScore>dScore;
-  // ★ 필살기 무장(관우·여포)이 공격자면 압도적 승리 보장
-  const atkUltimate = CUTSCENES[atkU.name] && personaOf(atkU.gen)!=='wise';
-  const forcedWin = atkUltimate ? true : win;
+  // ★ 필살기 발동 판정
+  const atkIsUltGen = CUTSCENES[atkU.name] && personaOf(atkU.gen)!=='wise';
+  const defIsUltGen = CUTSCENES[defU.name] && personaOf(defU.gen)!=='wise';
+  let ultProc=false;      // 이번 일기토에서 필살기 발동 여부
+  let clashOfHeroes=false; // 양쪽 다 필살기 무장 → 용호상박(상쇄)
+  if(atkIsUltGen && defIsUltGen){
+    // 양쪽 필살기 무장: 필살기 상쇄, 순수 실력 승부 (강제승리 없음)
+    clashOfHeroes=true;
+  } else if(atkIsUltGen){
+    // 한쪽만: 확률 발동. 무력·사기 높을수록↑, 일반판정 이기면↑ 지면↓(역전기)
+    let chance = atkU.war/220 + (atkU.morale-70)/300; // 무력97·사기100 ≈ 0.54
+    chance *= win ? 1.5 : 0.4; // 이기고 있으면 잘 터지고, 지고 있으면 가끔 역전
+    chance = Math.max(0.05, Math.min(0.85, chance)); // 5%~85% 범위
+    ultProc = Math.random() < chance;
+  }
+  // 최종 승패: 필살기 발동 시 무조건 승리, 아니면 일반 판정
+  const forcedWin = ultProc ? true : win;
   B.duelDone=true;
   // 애니메이션 재생 후 결과 처리
   playDuelAnimation(atkU, defU, roundWin, forcedWin, rel, ()=>{
     let result='';
     const win=forcedWin;
     if(win){
-      // ★ 필살기 무장: 궤멸적 피해(참수) + 주변 위축
-      const isUlt = CUTSCENES[atkU.name] && personaOf(atkU.gen)!=='wise';
+      // ★ 필살기 발동 시에만 궤멸적 피해(참수). 일반 승리는 보통 피해
+      const isUlt = ultProc;
       const lossRate = isUlt ? 0.55 : 0.25;
       const lossFlat = isUlt ? 800 : 300;
       const loss=Math.min(defU.troops, Math.floor(defU.troops*lossRate+lossFlat));
@@ -3630,8 +3644,10 @@ function doDuel(atkU, defU){
         result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
       }
       shake('xl'); sfx('crit'); haptic(140); impactFlash('big'); hitStop(); slashFx(defU.col,defU.row); shockwave(defU.col,defU.row); vignette('gold'); popDamage(defU.col,defU.row, isUlt?'참수!':'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,isUlt?32:20,'#d44');
-      // 무력형 영웅(여포·관우)의 일기토 승리 시 필살기 컷신
-      if(CUTSCENES[atkU.name] && !_cutscenePlaying){ playCutscene(atkU.name); } else { bigBanner('一騎討 勝!','#ffd234'); }
+      // 필살기가 실제로 발동했을 때만 컷신
+      if(isUlt && CUTSCENES[atkU.name] && !_cutscenePlaying){ playCutscene(atkU.name); }
+      else if(clashOfHeroes){ bigBanner('龍虎相搏!','#ffd234'); }
+      else { bigBanner('一騎討 勝!','#ffd234'); }
     } else {
       const loss=Math.min(atkU.troops, Math.floor(atkU.troops*0.18+200));
       atkU.troops-=loss; atkU.morale=Math.max(0,atkU.morale-25);
