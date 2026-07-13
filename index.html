@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.39';
+const GAME_VERSION = 'v2.40';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1593,6 +1593,7 @@ function selectCity(id){
       <div class="cmd-btn ${c.gold<200?'disabled':dis}" onclick="cmdConscript()">⚔️징병${subC(conscript,200)}</div>
       <div class="cmd-btn ${c.gold<80?'disabled':dis}" onclick="cmdTrain()">🏋️훈련${sub(trainEff,80)}</div>
       <div class="cmd-btn ${c.gold<300?'disabled':dis}" onclick="cmdPersuade()">🤝회유<span class="cmd-eff"><span class="cmd-cost">(300금)</span></span></div>
+      <div class="cmd-btn ${dis}" onclick="cmdMove()">🚚이동·배치</div>
       <div class="cmd-btn" onclick="cmdAttack()">🔥출병·공격</div>
     </div>${synergyNote}${acted?'<div class="acted-note">이번 달 내정 명령을 사용했습니다 (출병은 가능)</div>':''}`;
   }
@@ -2104,6 +2105,109 @@ function tryRecruitFree(genId){
       }
     }}
   ]);
+}
+// 무장+병력 이동·배치: 인접 아군/빈 도시로 재배치
+let MOVE = null;
+function cmdMove(){
+  const c=G.cities[G.selectedCity];
+  if(c.owner!==G.playerFaction) return;
+  if(G.actionsLeft[c.id]===false){ toast('이번 달 행동을 이미 했습니다'); return; }
+  // 인접 도시 중 아군 소속 또는 빈 도시(무주공산)만 이동 대상
+  const dests=c.links.map(l=>G.cities[l]).filter(nc=> nc.owner===G.playerFaction || nc.owner===-1 );
+  if(!dests.length){ toast('이동할 수 있는 인접 아군·빈 도시가 없습니다'); return; }
+  const myGens=G.generals.filter(g=>g.cityId===c.id && g.faction===G.playerFaction && !g.dead);
+  if(!myGens.length && c.troops<=0){ toast('이동할 무장이나 병력이 없습니다'); return; }
+  MOVE={ from:c.id, to:null, genIds:[], troops:0 };
+  // 1단계: 목적지 선택
+  let rows=dests.map(nc=>{
+    const owned=nc.owner===G.playerFaction;
+    return `<div class="listitem" onclick="moveSetDest(${nc.id})">
+      <b style="color:${owned?'#8fd':'#d4af37'}">${nc.name}</b>
+      <span style="font-size:11px;color:#aaa;margin-left:6px">${owned?'아군 · 병력 '+(nc.troops||0).toLocaleString():'무주공산 (점령)'}</span>
+      <span style="margin-left:auto;color:#888">▶</span>
+    </div>`;
+  }).join('');
+  showModal('🚚 이동 · 배치 — 목적지',
+    `<p style="font-size:12px;color:#b8a878;margin-bottom:8px">${c.name}에서 인접한 아군 도시나 빈 성으로 무장·병력을 옮깁니다. (빈 성으로 무장과 함께 이동하면 그 성을 차지합니다)</p>${rows}`,
+    [{label:'취소',cls:'',fn:()=>{ MOVE=null; closeModal(); }}]);
+}
+function moveSetDest(toId){
+  MOVE.to=toId;
+  const from=G.cities[MOVE.from], to=G.cities[toId];
+  const myGens=G.generals.filter(g=>g.cityId===from.id && g.faction===G.playerFaction && !g.dead);
+  // 2단계: 데려갈 무장 선택 (다중)
+  const rows=myGens.map(g=>{
+    const sel=MOVE.genIds.includes(g.id);
+    return `<div class="listitem ${sel?'sel':''}" onclick="moveToggleGen(${g.id})" style="${sel?'background:rgba(232,200,116,0.15)':''}">
+      <span style="width:20px;display:inline-block">${sel?'✔':'　'}</span>
+      <b style="color:#d4af37">${g.name}</b>
+      <span style="font-size:12px;color:#aaa;margin-left:6px">무${g.war}·통${g.lead}·정${g.pol}</span>
+    </div>`;
+  }).join('') || '<div style="color:#888;padding:8px">이 도시에 무장이 없습니다 (병력만 이동 가능)</div>';
+  showModal(`🚚 ${to.name}(으)로 — 무장 선택`,
+    `<p style="font-size:12px;color:#b8a878;margin-bottom:8px">데려갈 무장을 고르세요(복수 선택). 빈 성 점령에는 무장이 1명 이상 필요합니다.</p>${rows}`,
+    [{label:'← 뒤로',cls:'',fn:()=>{ closeModal(); cmdMove(); }},
+     {label:'다음 (병력)',cls:'primary',fn:moveTroopStep}]);
+}
+function moveToggleGen(gid){
+  const i=MOVE.genIds.indexOf(gid);
+  if(i>=0) MOVE.genIds.splice(i,1); else MOVE.genIds.push(gid);
+  moveSetDest(MOVE.to); // 다시 그림
+}
+function moveTroopStep(){
+  const from=G.cities[MOVE.from], to=G.cities[MOVE.to];
+  // 3단계: 병력 지정 (0 ~ 출발지 병력)
+  const maxT=from.troops||0;
+  if(MOVE.troops>maxT) MOVE.troops=maxT;
+  const bars=`
+    <div style="text-align:center;margin:10px 0">
+      <div style="font-size:13px;color:#b8a878;margin-bottom:8px">데려갈 병력: <b style="color:var(--gold)">${MOVE.troops.toLocaleString()}</b> / ${maxT.toLocaleString()}</div>
+      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+        <button class="btn" onclick="moveAddTroops(-1000)">-1000</button>
+        <button class="btn" onclick="moveAddTroops(-100)">-100</button>
+        <button class="btn" onclick="moveAddTroops(100)">+100</button>
+        <button class="btn" onclick="moveAddTroops(1000)">+1000</button>
+        <button class="btn" onclick="moveAddTroops('max')">전부</button>
+        <button class="btn" onclick="moveAddTroops('zero')">0</button>
+      </div>
+    </div>`;
+  const genNames=MOVE.genIds.map(id=>G.generals.find(g=>g.id===id).name).join(', ')||'(없음)';
+  showModal(`🚚 ${from.name} → ${to.name}`,
+    `<div style="font-size:13px;line-height:1.7">무장: <b style="color:#d4af37">${genNames}</b></div>${bars}`,
+    [{label:'← 뒤로',cls:'',fn:()=>{ closeModal(); moveSetDest(MOVE.to); }},
+     {label:'이동 실행',cls:'primary',fn:doMove}]);
+}
+function moveAddTroops(delta){
+  const maxT=G.cities[MOVE.from].troops||0;
+  if(delta==='max') MOVE.troops=maxT;
+  else if(delta==='zero') MOVE.troops=0;
+  else MOVE.troops=Math.max(0,Math.min(maxT, MOVE.troops+delta));
+  moveTroopStep();
+}
+function doMove(){
+  const from=G.cities[MOVE.from], to=G.cities[MOVE.to];
+  const emptyTarget = to.owner===-1;
+  if(emptyTarget && MOVE.genIds.length===0){ toast('빈 성을 차지하려면 무장이 1명 이상 필요합니다'); return; }
+  if(MOVE.genIds.length===0 && MOVE.troops<=0){ toast('이동할 무장이나 병력을 지정하세요'); return; }
+  // 병력 이동
+  const t=Math.min(MOVE.troops, from.troops||0);
+  from.troops-=t;
+  // 빈 성 점령 처리
+  if(emptyTarget){
+    to.owner=G.playerFaction;
+    to.troops=(to.troops||0)+t;
+    log(`🚩 ${to.name}을(를) 무혈 점령했다!`, true);
+  } else {
+    to.troops=(to.troops||0)+t;
+  }
+  // 무장 이동
+  MOVE.genIds.forEach(id=>{ const g=G.generals.find(x=>x.id===id); if(g){ g.cityId=to.id; } });
+  useAction(from.id);
+  const names=MOVE.genIds.map(id=>G.generals.find(g=>g.id===id).name).join(', ');
+  log(`🚚 ${from.name} → ${to.name}: ${names||'병력'}${t>0?' + '+t.toLocaleString()+'병':''} 이동`);
+  sfx('move'); haptic(30);
+  MOVE=null;
+  closeModal(); refresh(); selectCity(from.id);
 }
 // 적 무장 회유(引き抜き): 인접 적 도시의 충성 낮은 무장을 금으로 빼오기
 function cmdPersuade(){
