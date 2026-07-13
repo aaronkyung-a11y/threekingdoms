@@ -490,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.47';
+const GAME_VERSION = 'v2.48';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2887,6 +2887,9 @@ const CUTSCENES = {
   '관우':   { img:'cutscenes/guanyu.png', name:'青龍偃月', sub:'관운장, 적장의 목을 취하다', color:'#3fb56a' },
   '제갈량': { img:'cutscenes/zhuge.png',  name:'八陣',   sub:'와룡, 천지를 진에 가두다', color:'#4a90e0' },
   '주유':   { img:'cutscenes/juyu.png',   name:'大火計', sub:'주유, 적벽의 불길을 부르다', color:'#ff7020' },
+  '장비':   { img:'cutscenes/zhangfei.png', name:'大喝', sub:'장익덕의 호통, 다리를 무너뜨리다', color:'#c0c0c0' },
+  '조운':   { img:'cutscenes/zhaoyun.png',  name:'匹馬單騎', sub:'상산 조자룡, 만군을 홀로 가르다', color:'#8fd0e8' },
+  '육손':   { img:'cutscenes/luxun.png',    name:'夷陵火攻', sub:'육백리 연영을 불사르다', color:'#ff5030' },
 };
 let _cutscenePlaying=false;
 function playCutscene(genName, done){
