@@ -307,6 +307,37 @@
   #vignette.go{ animation:vig .8s ease-out; }
   @keyframes vig{ 0%{opacity:0} 25%{opacity:1} 100%{opacity:0} }
   #vignette.gold{ box-shadow:inset 0 0 120px 40px rgba(230,180,40,.7); }
+  /* ===== 필살기 컷신 ===== */
+  #cutscene{ position:fixed; inset:0; z-index:80; pointer-events:none; display:none;
+    background:radial-gradient(circle at 50% 50%, rgba(0,0,0,.35), rgba(0,0,0,.82)); overflow:hidden; }
+  #cutscene.show{ display:block; }
+  #cutscene .cs-img{ position:absolute; right:-10%; bottom:0; height:96%; max-width:none;
+    filter:drop-shadow(0 0 30px rgba(0,0,0,.9)); opacity:0; }
+  #cutscene.show .cs-img{ animation:csImgIn 1.9s cubic-bezier(.16,.9,.28,1) forwards; }
+  @keyframes csImgIn{
+    0%{ opacity:0; transform:translateX(80px) scale(1.15); }
+    18%{ opacity:1; transform:translateX(0) scale(1); }
+    82%{ opacity:1; transform:translateX(0) scale(1.04); }
+    100%{ opacity:0; transform:translateX(-30px) scale(1.08); } }
+  /* 필살기명 세로 한자 */
+  #cutscene .cs-name{ position:absolute; left:8%; top:50%; transform:translateY(-50%);
+    writing-mode:vertical-rl; font-size:64px; font-weight:900; letter-spacing:8px; color:#fff;
+    text-shadow:0 0 4px #000, 0 3px 12px #000, 0 0 30px currentColor; opacity:0; white-space:nowrap; }
+  #cutscene.show .cs-name{ animation:csNameIn 1.9s cubic-bezier(.2,.9,.3,1) forwards; }
+  @keyframes csNameIn{
+    0%{ opacity:0; transform:translateY(-50%) scale(1.8); letter-spacing:40px; }
+    22%{ opacity:1; transform:translateY(-50%) scale(1); letter-spacing:8px; }
+    80%{ opacity:1; }
+    100%{ opacity:0; transform:translateY(-50%) scale(1.05); } }
+  #cutscene .cs-sub{ position:absolute; left:8%; bottom:8%; font-size:16px; color:#e8c874;
+    text-shadow:0 2px 6px #000; opacity:0; letter-spacing:2px; }
+  #cutscene.show .cs-sub{ animation:csSubIn 1.9s ease forwards; }
+  @keyframes csSubIn{ 0%,15%{opacity:0} 30%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+  /* 화면 가로 섬광 라인 */
+  #cutscene .cs-flash{ position:absolute; left:0; right:0; top:50%; height:0; opacity:0;
+    background:linear-gradient(90deg,transparent, #fff, transparent); }
+  #cutscene.show .cs-flash{ animation:csFlash 0.5s ease-out forwards; }
+  @keyframes csFlash{ 0%{height:0;opacity:0} 20%{height:6px;opacity:1} 100%{height:200px;opacity:0} }
   /* 대형 배너(크리티컬/궤멸/각성) */
   #bigBanner{ position:absolute; left:50%; top:42%; transform:translate(-50%,-50%); z-index:38; pointer-events:none;
     font-size:44px; font-weight:900; letter-spacing:4px; opacity:0; white-space:nowrap;
@@ -446,6 +477,7 @@
   <div id="bhead"><span class="bt" id="btitle">전투</span><span id="bturn"></span>
     <span class="bfx"><button id="terrLegendBtn" onclick="showTerrainLegend()">🗺️</button><button id="fxToggle" onclick="toggleFX()">🔊</button></span></div>
   <div id="bmapwrap"><svg id="bsvg" viewBox="0 0 907 792" preserveAspectRatio="xMidYMid meet"></svg><div id="impactFlash"></div><div id="focusLines"></div><div id="vignette"></div><div id="bigBanner"></div></div>
+  <div id="cutscene"><div class="cs-flash"></div><img class="cs-img" src=""><div class="cs-name"></div><div class="cs-sub"></div></div>
   <div id="bbottom"><div id="binfo">부대를 선택하세요.</div><div id="bcmd"></div></div>
   <div id="duelStage"></div>
 </div>
@@ -458,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.44';
+const GAME_VERSION = 'v2.45';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2847,6 +2879,38 @@ function bigBanner(text, color){
   el.className=''; void el.offsetWidth; el.classList.add('go');
   setTimeout(()=>{ el.className=''; }, 950);
 }
+
+// ===== 필살기 컷신 시스템 =====
+// 무장명 → 컷신 정의 (이미지, 필살기명 한자, 부제, 액센트 색)
+const CUTSCENES = {
+  '여포':   { img:'cutscenes/lubu.png',   name:'無雙',   sub:'천하무적 여포, 방천화극이 운다', color:'#e04545' },
+  '관우':   { img:'cutscenes/guanyu.png', name:'青龍偃月', sub:'관운장, 적장의 목을 취하다', color:'#3fb56a' },
+  '제갈량': { img:'cutscenes/zhuge.png',  name:'八陣',   sub:'와룡, 천지를 진에 가두다', color:'#4a90e0' },
+  '주유':   { img:'cutscenes/juyu.png',   name:'大火計', sub:'주유, 적벽의 불길을 부르다', color:'#ff7020' },
+};
+let _cutscenePlaying=false;
+function playCutscene(genName, done){
+  const cs=CUTSCENES[genName];
+  if(!cs || !FX.enabled){ done&&done(); return; } // 정의 없거나 효과 끄면 스킵
+  _cutscenePlaying=true;
+  const box=document.getElementById('cutscene');
+  const img=box.querySelector('.cs-img');
+  const nm=box.querySelector('.cs-name');
+  const sub=box.querySelector('.cs-sub');
+  img.src=cs.img; nm.textContent=cs.name; nm.style.color=cs.color;
+  sub.textContent=cs.sub;
+  box.className='show'; void box.offsetWidth;
+  // 연출 사운드/진동
+  sfx('crit'); haptic(160); shake('xl');
+  setTimeout(()=>haptic(80), 400);
+  // 1.9초 후 종료
+  setTimeout(()=>{ box.className=''; _cutscenePlaying=false; done&&done(); }, 1900);
+}
+// 탭하면 컷신 스킵
+document.addEventListener('DOMContentLoaded',()=>{
+  const box=document.getElementById('cutscene');
+  if(box) box.addEventListener('click',()=>{ if(_cutscenePlaying){ box.className=''; _cutscenePlaying=false; } });
+});
 // 히트스톱(순간 정지·번쩍)
 function hitStop(){
   const el=document.getElementById('battle'); if(!el) return;
@@ -3551,7 +3615,9 @@ function doDuel(atkU, defU){
       atkU.morale=Math.min(120,atkU.morale+10);
       const cry=genLine(atkU.gen,'win');
       result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
-      shake('xl'); sfx('crit'); haptic(140); impactFlash('big'); hitStop(); slashFx(defU.col,defU.row); shockwave(defU.col,defU.row); vignette('gold'); bigBanner('一騎討 勝!','#ffd234'); popDamage(defU.col,defU.row,'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,20,'#d44');
+      shake('xl'); sfx('crit'); haptic(140); impactFlash('big'); hitStop(); slashFx(defU.col,defU.row); shockwave(defU.col,defU.row); vignette('gold'); popDamage(defU.col,defU.row,'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,20,'#d44');
+      // 무력형 영웅(여포·관우)의 일기토 승리 시 필살기 컷신
+      if(CUTSCENES[atkU.name] && !_cutscenePlaying){ playCutscene(atkU.name); } else { bigBanner('一騎討 勝!','#ffd234'); }
     } else {
       const loss=Math.min(atkU.troops, Math.floor(atkU.troops*0.18+200));
       atkU.troops-=loss; atkU.morale=Math.max(0,atkU.morale-25);
@@ -3710,6 +3776,15 @@ function execStrat(key, caster, target){
     return;
   }
   let msg=`<b style="color:#8fd">${caster.name}</b>의 ${s.icon}${s.name} 성공!`;
+  // 특정 무장이 화계 성공 시 필살기 컷신 (주유·제갈량 등)
+  if(key==='fire' && CUTSCENES[caster.name] && !_cutscenePlaying){
+    playCutscene(caster.name, ()=>{ _execStratEffect(key, caster, target, msg, cx, cy); });
+    return;
+  }
+  _execStratEffect(key, caster, target, msg, cx, cy);
+}
+function _execStratEffect(key, caster, target, msg, cx, cy){
+  const s=STRATAGEMS[key];
   if(key==='fire'){
     const terr=hexAt(target.col,target.row).terr;
     let terrMul = terr==='forest'?1.6 : terr==='plain'?1.2 : 1.0;
