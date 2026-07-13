@@ -490,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.48';
+const GAME_VERSION = 'v2.49';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2891,6 +2891,13 @@ const CUTSCENES = {
   '조운':   { img:'cutscenes/zhaoyun.png',  name:'匹馬單騎', sub:'상산 조자룡, 만군을 홀로 가르다', color:'#8fd0e8' },
   '육손':   { img:'cutscenes/luxun.png',    name:'夷陵火攻', sub:'육백리 연영을 불사르다', color:'#ff5030' },
 };
+// 필살기 발동 타입: duel(일기토)·rampage(부대공격 무쌍)·fire(화계)
+const ULT_TYPE = {
+  '여포':'duel', '관우':'duel',        // 일대일 결투의 상징
+  '장비':'rampage', '조운':'rampage',  // 대군을 상대하는 무쌍
+  '주유':'fire', '제갈량':'fire', '육손':'fire', // 계략(화계)
+};
+function ultType(name){ return ULT_TYPE[name]||null; }
 let _cutscenePlaying=false;
 function playCutscene(genName, done){
   const cs=CUTSCENES[genName];
@@ -3608,9 +3615,9 @@ function doDuel(atkU, defU){
     else { dScore++; rounds.push(`${i+1}합: ${defU.name} 우세`); roundWin.push('d'); }
   }
   const win = aScore>dScore;
-  // ★ 필살기 발동 판정
-  const atkIsUltGen = CUTSCENES[atkU.name] && personaOf(atkU.gen)!=='wise';
-  const defIsUltGen = CUTSCENES[defU.name] && personaOf(defU.gen)!=='wise';
+  // ★ 필살기 발동 판정 (일기토 타입 무장만: 여포·관우)
+  const atkIsUltGen = ultType(atkU.name)==='duel';
+  const defIsUltGen = ultType(defU.name)==='duel';
   let ultProc=false;      // 이번 일기토에서 필살기 발동 여부
   let clashOfHeroes=false; // 양쪽 다 필살기 무장 → 용호상박(상쇄)
   if(atkIsUltGen && defIsUltGen){
@@ -3809,8 +3816,8 @@ function execStrat(key, caster, target){
     return;
   }
   let msg=`<b style="color:#8fd">${caster.name}</b>의 ${s.icon}${s.name} 성공!`;
-  // 특정 무장이 화계 성공 시 필살기 컷신 (주유·제갈량 등)
-  if(key==='fire' && CUTSCENES[caster.name] && !_cutscenePlaying){
+  // 특정 무장이 화계 성공 시 필살기 컷신 (주유·제갈량·육손)
+  if(key==='fire' && ultType(caster.name)==='fire' && !_cutscenePlaying){
     playCutscene(caster.name, ()=>{ _execStratEffect(key, caster, target, msg, cx, cy); });
     return;
   }
@@ -3818,7 +3825,7 @@ function execStrat(key, caster, target){
 }
 function _execStratEffect(key, caster, target, msg, cx, cy){
   const s=STRATAGEMS[key];
-  const isUltimate = CUTSCENES[caster.name] && key==='fire'; // 대화계/팔진 등 필살기 여부
+  const isUltimate = ultType(caster.name)==='fire' && key==='fire'; // 대화계·팔진·이릉화공 필살기 여부
   if(key==='fire'){
     const terr=hexAt(target.col,target.row).terr;
     let terrMul = terr==='forest'?1.6 : terr==='plain'?1.2 : 1.0;
@@ -4098,17 +4105,33 @@ function resolveAttack(atkU, defU){
   const defPower = defU.troops*(0.20+defU.war/400)*(1+defBonus)*defTT.def*defApt*defTaunted*defSkillMul;
   let dmg = Math.max(50, Math.floor(atkPower - defPower*0.5 + (Math.random()*200-100)));
   dmg = Math.min(dmg, defU.troops);
+  // ★ 무쌍 필살기(장비·조운): 부대 공격 시 확률 발동 — 압도적 피해 + 반격 무효 + 광역 위축
+  let rampage=false;
+  if(ultType(atkU.name)==='rampage' && !_cutscenePlaying && !isRanged){
+    let chance = atkU.war/240 + (atkU.morale-70)/320; // 무력·사기 기반
+    chance = Math.max(0.08, Math.min(0.7, chance));   // 8~70%
+    if(Math.random()<chance) rampage=true;
+  }
+  if(rampage){
+    dmg = Math.min(defU.troops, Math.floor(dmg*2.4 + defU.troops*0.2)); // 위력 대폭↑
+  }
   defU.troops -= dmg;
-  defU.morale = Math.max(0, defU.morale-12);
-  // 반격: 원거리(궁병) 공격이면 반격 없음. 근접이면 반격
+  defU.morale = Math.max(0, defU.morale-(rampage?40:12));
+  // 반격: 원거리(궁병) 공격이면 반격 없음. 근접이면 반격. 무쌍 발동 시 반격 무효(홀로 헤집음)
   let counter=0;
-  if(defU.troops>0 && !isRanged){
+  if(defU.troops>0 && !isRanged && !rampage){
     const dCounterMul=counterBonus(defTT.key, atkTT.key);
     counter = Math.max(20, Math.floor(defU.troops*(0.15+defU.war/400)*(0.5+defU.morale/200)*defTT.atkMul*dCounterMul*defApt + (Math.random()*100-50)));
     counter = Math.min(counter, atkU.troops);
     atkU.troops-=counter; atkU.morale=Math.max(0,atkU.morale-6);
   }
   atkU.acted=true; atkU.moved=true;
+  // ★ 무쌍 발동: 주변 적 사기 급감 + 컷신
+  if(rampage){
+    enemyUnits().filter(e=>e!==defU && hexDist(e,defU)<=2).forEach(e=>{ e.morale=Math.max(0,e.morale-25); });
+    if(CUTSCENES[atkU.name] && !_cutscenePlaying) playCutscene(atkU.name);
+    else bigBanner('無雙!','#ffd234');
+  }
   // === 이펙트 (강화) ===
   const big = dmg >= defU.maxTroops*0.35 || counterMul>1.05;
   const huge = dmg >= defU.maxTroops*0.55;
@@ -4122,6 +4145,7 @@ function resolveAttack(atkU, defU){
   if(counter>0){ setTimeout(()=>{ popDamage(atkU.col,atkU.row,'-'+counter,'counter'); hitFlash(atkU.col,atkU.row); spawnParticles(atkU.col,atkU.row,6,isPlayerUnit(atkU)?'#4a8ad4':'#d44'); sfx('hit'); haptic(30); }, 220); }
   const aptTag = atkU.gen ? ` <span style="color:#dca">${atkTT.name}${aptLabel(atkU.gen,atkTT.key)}</span>` : '';
   let msg=`<b>${atkU.name}</b>(${atkTT.icon}${aptTag}) → <b>${defU.name}</b>(${defTT.icon}) · 피해 ${dmg}`;
+  if(rampage) msg+=` <span style="color:#ffd234;font-weight:bold">[無雙! 일당천]</span>`;
   if(atkInspired>1) msg+=` <span style="color:#ffd234">[분전!]</span>`;
   if(defTaunted<1) msg+=` <span style="color:#8fa">[유인]</span>`;
   if(counterMul>1.05) msg+=` <span style="color:#8fd">[병과우세]</span>`;
