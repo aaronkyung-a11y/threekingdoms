@@ -20,7 +20,8 @@
   }
   body{ font-family:'Nanum Gothic','Malgun Gothic',sans-serif; background:var(--bg); color:var(--ink);
     overflow:hidden; user-select:none; -webkit-user-select:none; }
-  #app{ width:100vw; height:100vh; height:100dvh; display:flex; flex-direction:column; position:relative;
+  html,body{ overflow-x:hidden; max-width:100%; }
+  #app{ width:100%; max-width:100%; height:100vh; height:100dvh; display:flex; flex-direction:column; position:relative; overflow-x:hidden;
     padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
 
   /* PWA 설치 버튼 */
@@ -33,17 +34,17 @@
   /* Top bar */
   #topbar{ background:linear-gradient(#3a2f1c,#241c10); border-bottom:2px solid var(--gold);
     padding:5px 10px; }
-  .tb-row1{ display:flex; align-items:center; gap:8px; }
+  .tb-row1{ display:flex; align-items:center; gap:8px; min-width:0; }
   #topbar .title{ color:var(--gold); font-weight:bold; font-size:16px; letter-spacing:1px; flex-shrink:0; }
-  #topbar .date{ color:var(--ink2); font-size:12px; flex-shrink:0; }
+  #topbar .date{ color:var(--ink2); font-size:12px; flex-shrink:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #topbar .res{ display:flex; align-items:center; gap:10px; font-size:12px; margin-top:3px;
     white-space:nowrap; overflow-x:auto; }
   #topbar .res::-webkit-scrollbar{ display:none; }
   #topbar .res span{ color:var(--gold); font-weight:bold; }
   #topbar .res .rlbl{ color:var(--ink2); font-weight:normal; }
-  .topbtns{ margin-left:auto; display:flex; gap:5px; flex-shrink:0; }
+  .topbtns{ margin-left:auto; display:flex; gap:4px; flex-shrink:0; }
   .tbtn{ background:var(--panel2); border:1px solid var(--gold); color:var(--ink);
-    width:32px; height:30px; border-radius:6px; font-size:15px; cursor:pointer; padding:0;
+    width:30px; height:30px; border-radius:6px; font-size:14px; cursor:pointer; padding:0;
     display:flex; align-items:center; justify-content:center; }
   .tbtn:active{ background:var(--gold); }
 
@@ -456,7 +457,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.41';
+const GAME_VERSION = 'v2.42';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -4698,7 +4699,7 @@ function slotLoad(slotKey){
   const m=s.meta||{};
   showModal('불러오기 확인',
     `<div style="line-height:1.7"><b style="color:var(--gold)">${s.name||'세이브'}</b><br>${m.year||'?'}년 ${m.month||'?'}월 · ${factionLabel(m.faction)}<br><br>이 세이브를 불러올까요? 현재 진행 중인 게임은 사라집니다.</div>`,
-    [{label:'취소',cls:'',fn:renderSaveManager},
+    [{label:'취소',cls:'',fn:renderLoadMenu},
      {label:'불러오기',cls:'primary',fn:()=>{
         applySaveData(s.data);
         closeModal(); closeBottom(); renderAll();
@@ -4752,6 +4753,18 @@ function fmtSaveTime(iso){
 }
 function factionLabel(fid){ return (FACTION_INFO[fid]&&FACTION_INFO[fid].name) || (FACTIONS[fid]&&FACTIONS[fid].name) || '?'; }
 function renderSaveManager(){
+  // 허브: 저장하기 / 불러오기 선택
+  const slots=readSlots();
+  const hasSlots=Object.keys(slots).length>0;
+  const body=`<p style="font-size:13px;color:#b8a878;line-height:1.7;margin-bottom:4px">무엇을 하시겠어요?</p>`;
+  showModal('💾 세이브', body, [
+    {label:'💾 저장하기',cls:'primary',fn:renderSaveMenu},
+    {label:'📂 불러오기',cls:'',fn:renderLoadMenu},
+    {label:'닫기',cls:'',fn:closeModal},
+  ]);
+}
+// === 저장하기 화면 ===
+function renderSaveMenu(){
   const slots=readSlots();
   const keys=Object.keys(slots).sort((a,b)=>{
     const ta=slots[a].meta?.savedAt||'', tb=slots[b].meta?.savedAt||''; return tb.localeCompare(ta);
@@ -4759,39 +4772,58 @@ function renderSaveManager(){
   let list = keys.length ? keys.map(k=>{
     const s=slots[k]; const m=s.meta||{};
     return `<div class="save-slot">
-      <div class="ss-main" onclick="slotLoad('${k}')">
+      <div class="ss-main" onclick="slotOverwrite('${k}')" title="이 슬롯에 덮어쓰기">
         <div class="ss-name">${s.name||k}</div>
         <div class="ss-meta">${m.year||'?'}년 ${m.month||'?'}월 · ${factionLabel(m.faction)} · ${fmtSaveTime(m.savedAt)}</div>
       </div>
       <div class="ss-btns">
-        <button class="ss-b" onclick="event.stopPropagation(); slotOverwrite('${k}')" title="이 슬롯에 현재 상황 덮어쓰기">💾</button>
         <button class="ss-b" onclick="event.stopPropagation(); slotRename('${k}')" title="이름 변경">✏️</button>
         <button class="ss-b ss-del" onclick="event.stopPropagation(); slotDelete('${k}')" title="삭제">🗑️</button>
       </div>
     </div>`;
-  }).join('') : '<div style="color:#888;text-align:center;padding:16px">저장된 게임이 없습니다.</div>';
-
+  }).join('') : '<div style="color:#888;text-align:center;padding:12px">저장된 슬롯이 없습니다. 새 슬롯에 저장하세요.</div>';
   const body=`
-    <div class="save-actions">
-      <button class="sa-btn primary" onclick="slotNew()">➕ 새 슬롯에 저장</button>
-      <button class="sa-btn" onclick="cloudRestore()">☁️ 클라우드에서 불러오기</button>
-    </div>
+    <div class="save-actions"><button class="sa-btn primary" onclick="slotNew()">➕ 새 슬롯에 저장</button></div>
+    <p style="font-size:11px;color:#8a7a55;margin:2px 0 8px">기존 슬롯을 누르면 그 슬롯에 덮어쓰기됩니다.</p>
     <div class="save-list">${list}</div>
-    <div class="save-note">💾 저장 시 자동으로 클라우드(Gist)에 백업됩니다. 캐시가 지워지거나 기기를 바꿔도 ☁️ 버튼으로 복구할 수 있습니다.</div>`;
-  showModal('💾 세이브 관리', body, [{label:'닫기',cls:'primary',fn:closeModal}]);
+    <div class="save-note">💾 저장 시 자동으로 클라우드에 백업됩니다.</div>`;
+  showModal('💾 저장하기', body, [{label:'← 뒤로',cls:'',fn:renderSaveManager},{label:'닫기',cls:'primary',fn:closeModal}]);
+}
+// === 불러오기 화면 ===
+function renderLoadMenu(){
+  const slots=readSlots();
+  const keys=Object.keys(slots).sort((a,b)=>{
+    const ta=slots[a].meta?.savedAt||'', tb=slots[b].meta?.savedAt||''; return tb.localeCompare(ta);
+  });
+  let list = keys.length ? keys.map(k=>{
+    const s=slots[k]; const m=s.meta||{};
+    return `<div class="save-slot">
+      <div class="ss-main" onclick="slotLoad('${k}')" title="이 세이브를 불러오기">
+        <div class="ss-name">${s.name||k}</div>
+        <div class="ss-meta">${m.year||'?'}년 ${m.month||'?'}월 · ${factionLabel(m.faction)} · ${fmtSaveTime(m.savedAt)}</div>
+      </div>
+      <div class="ss-btns"><span style="color:#8fd;font-size:13px;padding:6px">▶ 불러오기</span></div>
+    </div>`;
+  }).join('') : '<div style="color:#888;text-align:center;padding:12px">불러올 세이브가 없습니다.</div>';
+  const body=`
+    <div class="save-actions"><button class="sa-btn" onclick="cloudRestore()">☁️ 클라우드에서 불러오기</button></div>
+    <p style="font-size:11px;color:#8a7a55;margin:2px 0 8px">세이브를 누르면 불러옵니다 (진행 중인 게임은 사라집니다).</p>
+    <div class="save-list">${list}</div>
+    <div class="save-note">☁️ 캐시가 지워지거나 기기를 바꿨다면 클라우드에서 복구하세요.</div>`;
+  showModal('📂 불러오기', body, [{label:'← 뒤로',cls:'',fn:renderSaveManager},{label:'닫기',cls:'primary',fn:closeModal}]);
 }
 function slotNew(){
   const name=prompt('세이브 이름을 입력하세요', G.year+'년 '+G.month+'월');
   if(name===null) return;
   const key='slot_'+Date.now();
   slotSave(key, name.trim()||('세이브 '+G.year));
-  setTimeout(renderSaveManager, 300);
+  setTimeout(renderSaveMenu, 300);
 }
 function slotOverwrite(key){
   const slots=readSlots(); const nm=slots[key]?.name;
   showModal('덮어쓰기', `"${nm}" 슬롯에 현재 상황을 덮어쓸까요?`,
-    [{label:'취소',cls:'',fn:renderSaveManager},
-     {label:'덮어쓰기',cls:'primary',fn:()=>{ slotSave(key, nm); setTimeout(renderSaveManager,300); }}]);
+    [{label:'취소',cls:'',fn:renderSaveMenu},
+     {label:'덮어쓰기',cls:'primary',fn:()=>{ slotSave(key, nm); setTimeout(renderSaveMenu,300); }}]);
 }
 function slotRename(key){
   const slots=readSlots(); if(!slots[key]) return;
@@ -4799,16 +4831,16 @@ function slotRename(key){
   if(name===null) return;
   slots[key].name=name.trim()||slots[key].name; writeSlots(slots);
   cloudPush(slots).catch(()=>{});
-  renderSaveManager();
+  renderSaveMenu();
 }
 function slotDelete(key){
   const slots=readSlots(); const nm=slots[key]?.name||key;
   showModal('삭제', `"${nm}" 세이브를 삭제할까요? (클라우드에서도 삭제됩니다)`,
-    [{label:'취소',cls:'',fn:renderSaveManager},
+    [{label:'취소',cls:'',fn:renderSaveMenu},
      {label:'삭제',cls:'primary',fn:()=>{
         delete slots[key]; writeSlots(slots);
         cloudPush(slots).catch(()=>{});
-        renderSaveManager();
+        renderSaveMenu();
      }}]);
 }
 async function cloudRestore(){
@@ -4823,7 +4855,7 @@ async function cloudRestore(){
       _cloudReady=true; setSaveStatus('ok');
       toast(n>0?`☁️ ${n}개 세이브를 복구했습니다`:'클라우드에 세이브가 없습니다');
     } else { toast('클라우드에 세이브가 없습니다'); }
-    renderSaveManager();
+    renderLoadMenu();
   }catch(e){ toast('클라우드 접속 실패'); setSaveStatus('fail'); }
 }
 
@@ -4904,7 +4936,7 @@ function goToMainMenu(){
 }
 function showFactionOrContinue(hasSave, hasSlots){
   const btns=[{label:'새 게임',cls:'',fn:()=>{ closeModal(); showScenarioSelect(); }}];
-  if(hasSlots){ btns.push({label:'💾 로드하기',cls: hasSave?'':'primary',fn:()=>{ closeModal(); renderSaveManager(); }}); }
+  if(hasSlots){ btns.push({label:'💾 로드하기',cls: hasSave?'':'primary',fn:()=>{ closeModal(); renderLoadMenu(); }}); }
   if(hasSave){ btns.push({label:'▶ 이어하기',cls:'primary',fn:()=>{ closeModal(); startFresh(); doLoadDirect(); }}); }
   showModal('群雄割據', `<div style="line-height:1.7">저장된 게임이 있습니다.<br>이어서 하거나, 저장된 세이브를 불러오거나, 새 시나리오를 시작할 수 있습니다.</div>`, btns);
 }
