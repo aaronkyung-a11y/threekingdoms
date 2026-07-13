@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.37';
+const GAME_VERSION = 'v2.38';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2663,6 +2663,21 @@ function stopBgm(){
   stopMp3();
 }
 function setBgmMode(mode){ if(BGM.mode!==mode) startBgm(mode); }
+// 평시 BGM: 성의 절반 이상을 점령하면 웅장한 타이틀곡(패권 국면), 아니면 평시곡
+const HEGEMON_THRESHOLD = 0.5;
+function hegemonRatio(){
+  const total=G.cities.filter(c=>c.owner>=0).length || G.cities.length;
+  const mine=G.cities.filter(c=>c.owner===G.playerFaction).length;
+  return total? mine/total : 0;
+}
+function peaceBgm(){
+  const ratio=hegemonRatio();
+  const isHegemon = ratio>=HEGEMON_THRESHOLD;
+  // 패권 국면 진입/이탈 알림 (전환 순간 1회)
+  if(isHegemon && !G._hegemonState){ G._hegemonState=true; log(`👑 천하의 절반을 손에 넣었다! 패권의 서곡이 울려퍼진다.`, true); }
+  else if(!isHegemon && G._hegemonState){ G._hegemonState=false; log(`성세가 꺾였다. 아직 천하는 멀다.`); }
+  setBgmMode(isHegemon ? 'title' : 'field');
+}
 
 // 화면 흔들림
 function shake(intensity){
@@ -3937,8 +3952,8 @@ function endBattle(result){
   if(result==='win'){ sfx('win'); hapticPattern([60,40,60,40,120]); }
   else if(result==='lose'){ sfx('lose'); haptic(200); }
   // 승리 시 짧게 승전 음악 → 8초 뒤 평시 복귀 / 그 외 즉시 평시
-  if(result==='win'){ startBgm('victory'); setTimeout(()=>{ if(BGM.mode==='victory') setBgmMode('field'); }, 14000); }
-  else setBgmMode('field');
+  if(result==='win'){ startBgm('victory'); setTimeout(()=>{ if(BGM.mode==='victory') peaceBgm(); }, 14000); }
+  else peaceBgm();
   const atk=G.cities[B.atkCity], def=G.cities[B.defCity];
   const atkRemain=B.units.filter(u=>u.side==='atk').reduce((s,u)=>s+Math.max(0,u.troops),0);
   const defRemain=B.units.filter(u=>u.side==='def').reduce((s,u)=>s+Math.max(0,u.troops),0);
@@ -4228,6 +4243,8 @@ function endTurn(){
   // 승패 판정
   checkGameEnd();
   refresh();
+  // 평시 국면이면 점유율에 따라 BGM 전환 (전투/승리곡 재생 중엔 유지)
+  if(BGM.mode!=='battle' && BGM.mode!=='victory') peaceBgm();
   if(G.selectedCity!=null) selectCity(G.selectedCity);
   log(`—— ${G.year}년 ${G.month}월 ——`);
   autoSave();
