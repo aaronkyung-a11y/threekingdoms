@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.40';
+const GAME_VERSION = 'v2.41';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2106,29 +2106,49 @@ function tryRecruitFree(genId){
     }}
   ]);
 }
-// 무장+병력 이동·배치: 인접 아군/빈 도시로 재배치
+// 무장+병력 이동·배치: 내 영토 내 연결된 도시로 원거리 이동 (빈 성은 인접만 점령)
 let MOVE = null;
+// 출발 도시에서 아군 영토를 통해 도달 가능한 모든 아군 도시 (BFS)
+function connectedFriendlyCities(startId){
+  const visited={}; visited[startId]=true;
+  const q=[startId]; const result=[];
+  while(q.length){
+    const cur=q.shift();
+    for(const l of G.cities[cur].links){
+      if(visited[l]) continue;
+      const nc=G.cities[l];
+      if(nc.owner===G.playerFaction){ visited[l]=true; result.push(l); q.push(l); }
+    }
+  }
+  return result; // 출발지 제외한 연결된 아군 도시 id들
+}
 function cmdMove(){
   const c=G.cities[G.selectedCity];
   if(c.owner!==G.playerFaction) return;
   if(G.actionsLeft[c.id]===false){ toast('이번 달 행동을 이미 했습니다'); return; }
-  // 인접 도시 중 아군 소속 또는 빈 도시(무주공산)만 이동 대상
-  const dests=c.links.map(l=>G.cities[l]).filter(nc=> nc.owner===G.playerFaction || nc.owner===-1 );
-  if(!dests.length){ toast('이동할 수 있는 인접 아군·빈 도시가 없습니다'); return; }
+  // 목적지: 연결된 아군 도시(원거리 가능) + 인접한 빈 성(무혈 점령)
+  const farFriendly=connectedFriendlyCities(c.id).map(id=>G.cities[id]);
+  const adjEmpty=c.links.map(l=>G.cities[l]).filter(nc=>nc.owner===-1);
+  const dests=[...farFriendly, ...adjEmpty];
+  if(!dests.length){ toast('이동할 수 있는 아군 도시·빈 성이 없습니다'); return; }
   const myGens=G.generals.filter(g=>g.cityId===c.id && g.faction===G.playerFaction && !g.dead);
   if(!myGens.length && c.troops<=0){ toast('이동할 무장이나 병력이 없습니다'); return; }
   MOVE={ from:c.id, to:null, genIds:[], troops:0 };
-  // 1단계: 목적지 선택
+  // 1단계: 목적지 선택 (인접/원거리 구분 표시)
+  const adjSet=new Set(c.links);
   let rows=dests.map(nc=>{
     const owned=nc.owner===G.playerFaction;
+    const isAdj=adjSet.has(nc.id);
+    const tag = owned ? (isAdj?'아군·인접':'아군·원거리') : '무주공산 (점령)';
+    const tagColor = owned ? (isAdj?'#8fd':'#7ab0d0') : '#d4af37';
     return `<div class="listitem" onclick="moveSetDest(${nc.id})">
       <b style="color:${owned?'#8fd':'#d4af37'}">${nc.name}</b>
-      <span style="font-size:11px;color:#aaa;margin-left:6px">${owned?'아군 · 병력 '+(nc.troops||0).toLocaleString():'무주공산 (점령)'}</span>
+      <span style="font-size:11px;color:${tagColor};margin-left:6px">${tag}${owned?' · 병력 '+(nc.troops||0).toLocaleString():''}</span>
       <span style="margin-left:auto;color:#888">▶</span>
     </div>`;
   }).join('');
   showModal('🚚 이동 · 배치 — 목적지',
-    `<p style="font-size:12px;color:#b8a878;margin-bottom:8px">${c.name}에서 인접한 아군 도시나 빈 성으로 무장·병력을 옮깁니다. (빈 성으로 무장과 함께 이동하면 그 성을 차지합니다)</p>${rows}`,
+    `<p style="font-size:12px;color:#b8a878;margin-bottom:8px">${c.name}에서 아군 영토로 이동합니다. 연결된 아군 도시면 <b>원거리도 한 번에</b> 이동합니다. 빈 성은 인접한 경우 무장과 함께 이동해 점령할 수 있습니다.</p>${rows}`,
     [{label:'취소',cls:'',fn:()=>{ MOVE=null; closeModal(); }}]);
 }
 function moveSetDest(toId){
