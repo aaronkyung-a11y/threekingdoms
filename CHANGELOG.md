@@ -1,5 +1,12 @@
 # 群雄割據 (삼국지) CHANGELOG
 
+## v2.37 (2026-07-13)
+승리 음악(MP3) 적용 — 주요 BGM 4종 완성.
+- Suno 제작 "Golden Banner Rise"를 승리(victory) BGM으로 적용 (bgm/victory.mp3)
+- 전투 승리 시 재생 → 14초 후 평시곡 복귀 (9→14초로 연장)
+- 이제 타이틀·평시·전투·승리 모두 실제 음원 (긴박만 합성음, 현재 미사용)
+- MP3 4종 로드·루프·전 8개 시나리오·런타임 에러 0 검증
+
 ## v2.36 (2026-07-13)
 전투 음악(MP3) 적용.
 - Suno 제작 "Red Banner Charge"를 전투(battle) BGM으로 적용 (bgm/battle.mp3, 3분20초 루프)
