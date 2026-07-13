@@ -490,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.49';
+const GAME_VERSION = 'v2.50';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2890,12 +2890,17 @@ const CUTSCENES = {
   '장비':   { img:'cutscenes/zhangfei.png', name:'大喝', sub:'장익덕의 호통, 다리를 무너뜨리다', color:'#c0c0c0' },
   '조운':   { img:'cutscenes/zhaoyun.png',  name:'匹馬單騎', sub:'상산 조자룡, 만군을 홀로 가르다', color:'#8fd0e8' },
   '육손':   { img:'cutscenes/luxun.png',    name:'夷陵火攻', sub:'육백리 연영을 불사르다', color:'#ff5030' },
+  '장료':   { img:'cutscenes/zhangliao.png', name:'遼來', sub:'장료가 온다 — 강동의 아이가 울음을 그친다', color:'#5a9fd4' },
+  '하후돈': { img:'cutscenes/xiahoudun.png', name:'拔矢啖睛', sub:'화살을 뽑아 눈을 삼키고 돌격하다', color:'#d43a3a' },
+  '허저':   { img:'cutscenes/xuchu.png',    name:'虎癡', sub:'호치 허저, 범 같은 힘으로 짓누르다', color:'#c8963c' },
 };
 // 필살기 발동 타입: duel(일기토)·rampage(부대공격 무쌍)·fire(화계)
 const ULT_TYPE = {
   '여포':'duel', '관우':'duel',        // 일대일 결투의 상징
   '장비':'rampage', '조운':'rampage',  // 대군을 상대하는 무쌍
   '주유':'fire', '제갈량':'fire', '육손':'fire', // 계략(화계)
+  '장료':'rampage', '하후돈':'rampage', // 위: 저돌적 돌격·광기의 돌진
+  '허저':'duel',                        // 위: 호랑이 맹장의 일대일
 };
 function ultType(name){ return ULT_TYPE[name]||null; }
 let _cutscenePlaying=false;
