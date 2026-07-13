@@ -280,6 +280,7 @@
   .dmg-pop.crit{ color:#ffd234; font-size:32px; text-shadow:0 0 6px #000,0 0 16px #ffae00,0 2px 8px #000; }
   .dmg-pop.counter{ color:#ff9c6e; font-size:17px; }
   .dmg-pop.heal{ color:#8fffaa; }
+  .dmg-pop.burn{ color:#ff8020; font-size:18px; text-shadow:0 0 6px #a01800,0 2px 4px #000; }
   @keyframes dmgUp{ 0%{opacity:0;transform:translate(-50%,-30%) scale(.5)} 18%{opacity:1;transform:translate(-50%,-62%) scale(1.35)} 32%{transform:translate(-50%,-64%) scale(1.05)} 100%{opacity:0;transform:translate(-50%,-150%) scale(1)} }
   /* 타격 플래시 */
   .hit-flash{ position:absolute; width:88px; height:88px; transform:translate(-50%,-50%); pointer-events:none; z-index:9;
@@ -444,7 +445,7 @@
 <div id="battle">
   <div id="bhead"><span class="bt" id="btitle">전투</span><span id="bturn"></span>
     <span class="bfx"><button id="terrLegendBtn" onclick="showTerrainLegend()">🗺️</button><button id="fxToggle" onclick="toggleFX()">🔊</button></span></div>
-  <div id="bmapwrap"><svg id="bsvg" viewBox="0 0 765 645" preserveAspectRatio="xMidYMid meet"></svg><div id="impactFlash"></div><div id="focusLines"></div><div id="vignette"></div><div id="bigBanner"></div></div>
+  <div id="bmapwrap"><svg id="bsvg" viewBox="0 0 907 792" preserveAspectRatio="xMidYMid meet"></svg><div id="impactFlash"></div><div id="focusLines"></div><div id="vignette"></div><div id="bigBanner"></div></div>
   <div id="bbottom"><div id="binfo">부대를 선택하세요.</div><div id="bcmd"></div></div>
   <div id="duelStage"></div>
 </div>
@@ -457,7 +458,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.42';
+const GAME_VERSION = 'v2.43';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2959,7 +2960,7 @@ function focusLinesFx(){
 }
 
 /* ---------- 전투 맵 확대/축소 ---------- */
-const BVIEW={ x:0,y:0,w:765,h:645, baseW:765, baseH:645, dragging:false, dragged:false, lastX:0,lastY:0, pinch:0 };
+const BVIEW={ x:0,y:0,w:907,h:792, baseW:907, baseH:792, dragging:false, dragged:false, lastX:0,lastY:0, pinch:0 };
 function resetBattleView(){ BVIEW.x=0;BVIEW.y=0;BVIEW.w=BVIEW.baseW;BVIEW.h=BVIEW.baseH; applyBView(); }
 function applyBView(){ const s=document.getElementById('bsvg'); if(s) s.setAttribute('viewBox',`${BVIEW.x} ${BVIEW.y} ${BVIEW.w} ${BVIEW.h}`); }
 function bScale(){ return BVIEW.baseW/BVIEW.w; }
@@ -2992,7 +2993,7 @@ function initBattleControls(){
 /* ============================================================
    헥스맵 전투 (삼국지 3식)
    ============================================================ */
-const HEX = { cols:13, rows:9, size:34 };
+const HEX = { cols:15, rows:11, size:38 };
 const B = { active:false, hexes:[], units:[], sel:null, phase:'player', atkCity:null, defCity:null, turn:1 };
 
 function axialToPixel(col,row){
@@ -3067,11 +3068,11 @@ function startBattle(atkId, defId, atkPicks, defPicks){
   B.playerSide = defPicks ? 'def' : 'atk'; // 플레이어가 조작하는 쪽
   B.phase = B.playerSide; // 플레이어 페이즈 먼저
   B.atkGarrison=0; B.defGarrison=0;
-  B.weather='맑음'; B.windDir=0; B.eventLog=[]; // 천기 상태
+  B.weather='맑음'; B.windDir=Math.floor(Math.random()*6); B.eventLog=[]; // 천기 상태 (바람 방향 랜덤)
   // === 지형 생성: 방어 도시의 실제 지리 프로파일 반영 ===
   B.hexes=[];
   for(let col=0;col<HEX.cols;col++)for(let row=0;row<HEX.rows;row++){
-    B.hexes.push({col,row,terr:'plain'});
+    B.hexes.push({col,row,terr:'plain',fire:0});
   }
   const prof = cityTerrainProfile(def.name);
   B.terrainName = prof.label;
@@ -3226,6 +3227,10 @@ function showTerrainLegend(){
 function renderBattle(){
   const svg=document.getElementById('bsvg');
   const s=HEX.size; let h='';
+  // 화염 그라디언트 정의
+  h+=`<defs><radialGradient id="fireGrad" cx="50%" cy="60%" r="60%">
+    <stop offset="0%" stop-color="#ffec80"/><stop offset="45%" stop-color="#ff7010"/><stop offset="100%" stop-color="#a01800" stop-opacity="0.3"/>
+  </radialGradient></defs>`;
   // hexes
   for(const hx of B.hexes){
     const {x,y}=axialToPixel(hx.col,hx.row);
@@ -3237,6 +3242,17 @@ function renderBattle(){
     if(isAtk){ stroke='#e04040'; sw=2.5; }
     h+=`<polygon class="hex" data-col="${hx.col}" data-row="${hx.row}" points="${pts}"
       fill="${terrainColor(hx.terr)}" stroke="${stroke}" stroke-width="${sw}" opacity="0.9"/>`;
+    // 불타는 헥스: 화염 오버레이 (애니메이션)
+    if(hx.fire>0){
+      const flick = 0.6 + Math.random()*0.4;
+      h+=`<polygon points="${pts}" fill="url(#fireGrad)" opacity="${flick}" style="pointer-events:none"><animate attributeName="opacity" values="${flick};${flick*0.55};${flick}" dur="0.5s" repeatCount="indefinite"/></polygon>`;
+      // 불꽃 이모지/모양
+      const fx=x, fy=y;
+      h+=`<g style="pointer-events:none" opacity="0.95">
+        <path d="M${fx} ${fy+s*0.4} Q ${fx-s*0.28} ${fy} ${fx} ${fy-s*0.5} Q ${fx+s*0.28} ${fy} ${fx} ${fy+s*0.4} Z" fill="#ff5010"><animate attributeName="d" values="M${fx} ${fy+s*0.4} Q ${fx-s*0.28} ${fy} ${fx} ${fy-s*0.5} Q ${fx+s*0.28} ${fy} ${fx} ${fy+s*0.4} Z;M${fx} ${fy+s*0.4} Q ${fx-s*0.18} ${fy} ${fx} ${fy-s*0.62} Q ${fx+s*0.32} ${fy} ${fx} ${fy+s*0.4} Z;M${fx} ${fy+s*0.4} Q ${fx-s*0.28} ${fy} ${fx} ${fy-s*0.5} Q ${fx+s*0.28} ${fy} ${fx} ${fy+s*0.4} Z" dur="0.4s" repeatCount="indefinite"/></path>
+        <path d="M${fx} ${fy+s*0.3} Q ${fx-s*0.15} ${fy} ${fx} ${fy-s*0.3} Q ${fx+s*0.15} ${fy} ${fx} ${fy+s*0.3} Z" fill="#ffc020"><animate attributeName="opacity" values="1;0.5;1" dur="0.3s" repeatCount="indefinite"/></path>
+      </g>`;
+    }
   }
   // units
   for(const u of B.units){
@@ -3266,7 +3282,9 @@ function renderBattle(){
     n.addEventListener('click',(e)=>{ e.stopPropagation(); onUnitClick(n.dataset.uid); });
   });
   const wIcon = B.weatherObj && B.weatherObj.icon ? ' · '+B.weatherObj.icon+B.weather : (B.weather&&B.weather!=='맑음'?' · '+B.weather:'');
-  document.getElementById('bturn').textContent=`${B.turn}턴 · ${B.phase===B.playerSide?'아군':'적군'}${wIcon}`;
+  const anyFire = B.hexes && B.hexes.some(h=>h.fire>0);
+  const windIcon = ' · 💨'+windLabel() + (anyFire?' 🔥':'');
+  document.getElementById('bturn').textContent=`${B.turn}턴 · ${B.phase===B.playerSide?'아군':'적군'}${wIcon}${windIcon}`;
 }
 function hexPoints(cx,cy,r){
   let p=[];
@@ -3696,6 +3714,16 @@ function execStrat(key, caster, target){
     const dmg=Math.floor(target.troops*(0.25+caster.int/400)*terrMul);
     target.troops=Math.max(0,target.troops-dmg);
     target.status.burn=2; target.morale=Math.max(0,target.morale-25);
+    // 실제 화염 발생: 목표 헥스 점화 + 바람 방향으로 초기 확산
+    const fireLife = (B.weatherObj && B.weatherObj.effect==='fire_boost') ? 5 : 3;
+    igniteHex(target.col,target.row,fireLife);
+    const wind=B.windDir||0;
+    windNeighbors(target.col,target.row).forEach((n,di)=>{
+      if(di===wind || di===(wind+1)%6 || di===(wind+5)%6){
+        const nh=hexAt(n.col,n.row);
+        if(nh && nh.terr!=='river' && nh.terr!=='water' && Math.random()<0.6) igniteHex(n.col,n.row,fireLife-1);
+      }
+    });
     enemyUnits().filter(e=>e!==target && hexDist(e,target)===1).forEach(e=>{
       const d2=Math.floor(e.troops*0.12); e.troops=Math.max(0,e.troops-d2); e.status.burn=1;
       spawnParticles(e.col,e.row,8,'#f80');
@@ -3703,7 +3731,7 @@ function execStrat(key, caster, target){
     impactFlash('big'); shake('xl'); hitStop(); haptic(140); vignette('gold'); shockwave(cx,cy);
     bigBanner('🔥 火計!', '#ff8020');
     for(let i=0;i<28;i++) setTimeout(()=>spawnParticles(cx,cy,3,['#f80','#fc0','#f40'][i%3]),i*28);
-    msg+=`<br>${target.name} 화염 -${dmg}${terr==='forest'?' <span style="color:#f80">[숲: 대폭발!]</span>':''}${B.weatherObj&&B.weatherObj.effect==='fire_boost'?' <span style="color:#8cf">[강풍!]</span>':''}`;
+    msg+=`<br>${target.name} 화염 -${dmg}${terr==='forest'?' <span style="color:#f80">[숲: 대폭발!]</span>':''}${B.weatherObj&&B.weatherObj.effect==='fire_boost'?' <span style="color:#8cf">[강풍!]</span>':''}<br><span style="color:#fa0;font-size:11px">🔥 불길이 ${windLabel()}을 타고 번진다!</span>`;
   } else if(key==='confuse'){
     target.status.confuse=2; target.morale=Math.max(0,target.morale-15);
     for(let i=0;i<12;i++) setTimeout(()=>spawnParticles(cx,cy,2,'#c0f'),i*40);
@@ -3730,6 +3758,60 @@ function execStrat(key, caster, target){
   checkBattleEnd(); checkPhaseEnd();
 }
 
+// ===== 화염 확산 시스템 (헥스에 불이 붙고 바람 방향으로 번짐) =====
+// 헥스 방향 인덱스(0~5)를 바람 방향으로. 짝수/홀수 열에 따라 이웃이 다름
+function windNeighbors(col,row){
+  const even = col%2===0;
+  const dirs = even
+    ? [[+1,0],[+1,-1],[0,-1],[-1,-1],[-1,0],[0,+1]]
+    : [[+1,+1],[+1,0],[0,-1],[-1,0],[-1,+1],[0,+1]];
+  return dirs.map(([dc,dr])=>({col:col+dc,row:row+dr}));
+}
+// 헥스에 불을 붙임 (life=불타는 턴수)
+function igniteHex(col,row,life){
+  const h=hexAt(col,row); if(!h) return;
+  if(h.terr==='river'||h.terr==='water') return; // 물에는 안 붙음
+  h.fire = Math.max(h.fire||0, life||3);
+}
+// 매 턴 화염 처리: 유닛 피해 + 바람 방향으로 확산 + 소화
+function processFireSpread(){
+  if(!B.hexes) return;
+  const burning = B.hexes.filter(h=>h.fire>0);
+  if(!burning.length) return;
+  const wind = B.windDir||0; // 0~5
+  const spreadTargets=[];
+  burning.forEach(h=>{
+    // 불탄 헥스 위 유닛에 화상 피해
+    const u=unitAt(h.col,h.row);
+    if(u && u.troops>0){
+      const terr=h.terr;
+      const base = terr==='forest'?0.18 : 0.10;
+      const dmg=Math.floor(u.troops*base);
+      u.troops=Math.max(0,u.troops-dmg);
+      u.status.burn=Math.max(u.status.burn||0,1);
+      u.morale=Math.max(0,u.morale-6);
+      spawnParticles(h.col,h.row,6,['#f80','#fc0'][Math.floor(Math.random()*2)]);
+      if(dmg>0) popDamage(h.col,h.row,'-'+dmg,'burn');
+    }
+    // 확산: 바람 방향(±1 이웃) 위주로 번짐. 숲은 잘 번지고 평지는 덜
+    const nbs=windNeighbors(h.col,h.row);
+    const spreadDirs=[wind, (wind+1)%6, (wind+5)%6]; // 바람 방향 + 좌우
+    spreadDirs.forEach((di,idx)=>{
+      const n=nbs[di]; if(!n) return;
+      const nh=hexAt(n.col,n.row); if(!nh||nh.fire>0) return;
+      if(nh.terr==='river'||nh.terr==='water') return;
+      // 정면(바람방향) 확산률 높음, 측면 낮음
+      const terrFactor = nh.terr==='forest'?1.0 : nh.terr==='plain'?0.55 : nh.terr==='hill'?0.4 : 0.5;
+      const dirFactor = idx===0?0.75:0.35;
+      if(Math.random() < terrFactor*dirFactor){ spreadTargets.push(n); }
+    });
+    h.fire--; // 수명 감소
+  });
+  // 확산 적용
+  spreadTargets.forEach(n=>{ const nh=hexAt(n.col,n.row); if(nh && !nh.fire){ nh.fire=2; spawnParticles(n.col,n.row,4,'#f40'); } });
+}
+const WIND_NAMES=['동','북동','북','북서','서','남']; // windDir 0~5 대략적 표기
+function windLabel(){ return WIND_NAMES[B.windDir||0]+'풍'; }
 // 사기 붕괴
 function checkMoraleCollapse(side){
   const units=B.units.filter(u=>u.side===side);
@@ -4044,6 +4126,9 @@ function enemyStrat(key, caster, target){
 }
 function endEnemyPhase(){
   tickStatuses('atk'); tickStatuses('def'); // 상태이상 턴 처리(화상·혼란 등)
+  processFireSpread(); // 화염 확산 + 불탄 헥스 피해
+  // 바람 방향이 가끔 바뀜 (전황 변화)
+  if(Math.random()<0.25){ B.windDir=(B.windDir + (Math.random()<0.5?1:5))%6; }
   B.turn++;
   B.units.forEach(u=>{ u.moved=false; u.acted=false; });
   B.phase=B.playerSide; B.duelDone=false;
