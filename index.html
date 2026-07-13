@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.36';
+const GAME_VERSION = 'v2.37';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2550,7 +2550,7 @@ const BGM_MP3 = {
   title: 'bgm/title.mp3',
   field: 'bgm/field.mp3',
   battle: 'bgm/battle.mp3',
-  // 추가 예정: victory ...
+  victory: 'bgm/victory.mp3',
 };
 let bgmAudio = null; // <audio> 엘리먼트 (MP3용)
 function stopMp3(){
@@ -3937,7 +3937,7 @@ function endBattle(result){
   if(result==='win'){ sfx('win'); hapticPattern([60,40,60,40,120]); }
   else if(result==='lose'){ sfx('lose'); haptic(200); }
   // 승리 시 짧게 승전 음악 → 8초 뒤 평시 복귀 / 그 외 즉시 평시
-  if(result==='win'){ startBgm('victory'); setTimeout(()=>{ if(BGM.mode==='victory') setBgmMode('field'); }, 9000); }
+  if(result==='win'){ startBgm('victory'); setTimeout(()=>{ if(BGM.mode==='victory') setBgmMode('field'); }, 14000); }
   else setBgmMode('field');
   const atk=G.cities[B.atkCity], def=G.cities[B.defCity];
   const atkRemain=B.units.filter(u=>u.side==='atk').reduce((s,u)=>s+Math.max(0,u.troops),0);
