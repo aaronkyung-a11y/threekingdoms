@@ -490,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.50';
+const GAME_VERSION = 'v2.51';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1417,7 +1417,7 @@ function renderMap(){
       ${big? `<rect x="${c.x-r-3}" y="${c.y-r-3}" width="${(r+3)*2}" height="${(r+3)*2}" rx="4" fill="none" stroke="#d4af37" stroke-width="1" opacity="0.5"/>`:''}
       <circle cx="${c.x}" cy="${c.y}" r="${r}" fill="${col}" stroke="${ring}" stroke-width="${isPlayer?3:1.5}"/>
       <text class="city-label" x="${c.x}" y="${c.y-r-6}">${c.name}</text>
-      <text class="city-owner" x="${c.x}" y="${c.y+4}" fill="#fff">${empty?'空':(f.name).slice(0,2)}</text>
+      <text class="city-owner" x="${c.x}" y="${c.y+4}" fill="#fff">${empty?'空':(f.name).split('(')[0].slice(0,2)}</text>
     </g>`;
   }
   svg.innerHTML = h;
