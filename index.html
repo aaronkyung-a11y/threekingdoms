@@ -456,7 +456,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.34';
+const GAME_VERSION = 'v2.35';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2548,7 +2548,8 @@ function bgmDrum(start,gain,kind){
 // === MP3 BGM (있으면 합성음 대신 실제 음원 재생) ===
 const BGM_MP3 = {
   title: 'bgm/title.mp3',
-  // 추가 예정: field, battle, victory ...
+  field: 'bgm/field.mp3',
+  // 추가 예정: battle, victory ...
 };
 let bgmAudio = null; // <audio> 엘리먼트 (MP3용)
 function stopMp3(){
