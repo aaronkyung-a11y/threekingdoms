@@ -490,7 +490,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.45';
+const GAME_VERSION = 'v2.46';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -3605,17 +3605,31 @@ function doDuel(atkU, defU){
     else { dScore++; rounds.push(`${i+1}합: ${defU.name} 우세`); roundWin.push('d'); }
   }
   const win = aScore>dScore;
+  // ★ 필살기 무장(관우·여포)이 공격자면 압도적 승리 보장
+  const atkUltimate = CUTSCENES[atkU.name] && personaOf(atkU.gen)!=='wise';
+  const forcedWin = atkUltimate ? true : win;
   B.duelDone=true;
   // 애니메이션 재생 후 결과 처리
-  playDuelAnimation(atkU, defU, roundWin, win, rel, ()=>{
+  playDuelAnimation(atkU, defU, roundWin, forcedWin, rel, ()=>{
     let result='';
+    const win=forcedWin;
     if(win){
-      const loss=Math.min(defU.troops, Math.floor(defU.troops*0.25+300));
-      defU.troops-=loss; defU.morale=Math.max(0,defU.morale-35);
-      atkU.morale=Math.min(120,atkU.morale+10);
+      // ★ 필살기 무장: 궤멸적 피해(참수) + 주변 위축
+      const isUlt = CUTSCENES[atkU.name] && personaOf(atkU.gen)!=='wise';
+      const lossRate = isUlt ? 0.55 : 0.25;
+      const lossFlat = isUlt ? 800 : 300;
+      const loss=Math.min(defU.troops, Math.floor(defU.troops*lossRate+lossFlat));
+      defU.troops-=loss; defU.morale=Math.max(0,defU.morale-(isUlt?70:35));
+      atkU.morale=Math.min(120,atkU.morale+(isUlt?20:10));
       const cry=genLine(atkU.gen,'win');
-      result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
-      shake('xl'); sfx('crit'); haptic(140); impactFlash('big'); hitStop(); slashFx(defU.col,defU.row); shockwave(defU.col,defU.row); vignette('gold'); popDamage(defU.col,defU.row,'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,20,'#d44');
+      if(isUlt){
+        // 주변 적 부대까지 사기 급감(무쌍의 위압)
+        enemyUnits().filter(e=>e!==defU && hexDist(e,defU)<=2).forEach(e=>{ e.morale=Math.max(0,e.morale-20); });
+        result=`<span style="color:#ffd234;font-weight:bold">⚔ ${atkU.name}, 필살! </span> 적 병력 -${loss} <span style="color:#f66">(궤멸적 피해!)</span><br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
+      } else {
+        result=`<span style="color:#8fd">${atkU.name} 승리!</span> 적 병력 -${loss}<br><span style="color:#dca;font-style:italic">"${cry}"</span>`;
+      }
+      shake('xl'); sfx('crit'); haptic(140); impactFlash('big'); hitStop(); slashFx(defU.col,defU.row); shockwave(defU.col,defU.row); vignette('gold'); popDamage(defU.col,defU.row, isUlt?'참수!':'一騎討 勝!','crit'); hitFlash(defU.col,defU.row); spawnParticles(defU.col,defU.row,isUlt?32:20,'#d44');
       // 무력형 영웅(여포·관우)의 일기토 승리 시 필살기 컷신
       if(CUTSCENES[atkU.name] && !_cutscenePlaying){ playCutscene(atkU.name); } else { bigBanner('一騎討 勝!','#ffd234'); }
     } else {
@@ -3785,31 +3799,51 @@ function execStrat(key, caster, target){
 }
 function _execStratEffect(key, caster, target, msg, cx, cy){
   const s=STRATAGEMS[key];
+  const isUltimate = CUTSCENES[caster.name] && key==='fire'; // 대화계/팔진 등 필살기 여부
   if(key==='fire'){
     const terr=hexAt(target.col,target.row).terr;
     let terrMul = terr==='forest'?1.6 : terr==='plain'?1.2 : 1.0;
     if(B.weatherObj && B.weatherObj.effect==='fire_boost') terrMul*=1.5; // 강풍
-    const dmg=Math.floor(target.troops*(0.25+caster.int/400)*terrMul);
+    // ★ 필살기(대화계·팔진): 위력 2.6배 + 광역
+    const ultMul = isUltimate ? 2.6 : 1.0;
+    const dmg=Math.floor(target.troops*(0.25+caster.int/400)*terrMul*ultMul);
     target.troops=Math.max(0,target.troops-dmg);
-    target.status.burn=2; target.morale=Math.max(0,target.morale-25);
+    target.status.burn=isUltimate?4:2; target.morale=Math.max(0,target.morale-(isUltimate?55:25));
     // 실제 화염 발생: 목표 헥스 점화 + 바람 방향으로 초기 확산
-    const fireLife = (B.weatherObj && B.weatherObj.effect==='fire_boost') ? 5 : 3;
+    const fireLife = isUltimate ? 7 : ((B.weatherObj && B.weatherObj.effect==='fire_boost') ? 5 : 3);
     igniteHex(target.col,target.row,fireLife);
     const wind=B.windDir||0;
-    windNeighbors(target.col,target.row).forEach((n,di)=>{
-      if(di===wind || di===(wind+1)%6 || di===(wind+5)%6){
-        const nh=hexAt(n.col,n.row);
-        if(nh && nh.terr!=='river' && nh.terr!=='water' && Math.random()<0.6) igniteHex(n.col,n.row,fireLife-1);
-      }
-    });
-    enemyUnits().filter(e=>e!==target && hexDist(e,target)===1).forEach(e=>{
-      const d2=Math.floor(e.troops*0.12); e.troops=Math.max(0,e.troops-d2); e.status.burn=1;
-      spawnParticles(e.col,e.row,8,'#f80');
-    });
-    impactFlash('big'); shake('xl'); hitStop(); haptic(140); vignette('gold'); shockwave(cx,cy);
-    bigBanner('🔥 火計!', '#ff8020');
+    if(isUltimate){
+      // 대화계: 목표 중심 반경 2칸을 통째로 점화 + 광역 피해
+      const blast=[target, ...B.hexes.filter(hh=>hexDist(hh,target)<=2)];
+      B.hexes.filter(hh=>hexDist(hh,target)<=2).forEach(hh=>{
+        if(hh.terr!=='river'&&hh.terr!=='water') igniteHex(hh.col,hh.row, fireLife-1);
+      });
+      // 반경 2칸 내 모든 적에게 대형 피해
+      enemyUnits().filter(e=>e!==target && hexDist(e,target)<=2).forEach(e=>{
+        const d2=Math.floor(e.troops*(0.28 + (hexDist(e,target)===1?0.12:0)));
+        e.troops=Math.max(0,e.troops-d2); e.status.burn=3; e.morale=Math.max(0,e.morale-35);
+        spawnParticles(e.col,e.row,14,'#f60'); popDamage(e.col,e.row,'-'+d2,'burn');
+      });
+      // 대폭발 연출
+      for(let i=0;i<60;i++) setTimeout(()=>spawnParticles(cx,cy,4,['#f80','#fc0','#f40','#ff5010'][i%4]),i*22);
+      shockwave(cx,cy); setTimeout(()=>shockwave(cx,cy),200); setTimeout(()=>shockwave(cx,cy),400);
+    } else {
+      windNeighbors(target.col,target.row).forEach((n,di)=>{
+        if(di===wind || di===(wind+1)%6 || di===(wind+5)%6){
+          const nh=hexAt(n.col,n.row);
+          if(nh && nh.terr!=='river' && nh.terr!=='water' && Math.random()<0.6) igniteHex(n.col,n.row,fireLife-1);
+        }
+      });
+      enemyUnits().filter(e=>e!==target && hexDist(e,target)===1).forEach(e=>{
+        const d2=Math.floor(e.troops*0.12); e.troops=Math.max(0,e.troops-d2); e.status.burn=1;
+        spawnParticles(e.col,e.row,8,'#f80');
+      });
+    }
+    impactFlash('big'); shake('xl'); hitStop(); haptic(isUltimate?200:140); vignette('gold'); shockwave(cx,cy);
+    bigBanner(isUltimate?'🔥 大火計!':'🔥 火計!', '#ff8020');
     for(let i=0;i<28;i++) setTimeout(()=>spawnParticles(cx,cy,3,['#f80','#fc0','#f40'][i%3]),i*28);
-    msg+=`<br>${target.name} 화염 -${dmg}${terr==='forest'?' <span style="color:#f80">[숲: 대폭발!]</span>':''}${B.weatherObj&&B.weatherObj.effect==='fire_boost'?' <span style="color:#8cf">[강풍!]</span>':''}<br><span style="color:#fa0;font-size:11px">🔥 불길이 ${windLabel()}을 타고 번진다!</span>`;
+    msg+=`<br>${target.name} 화염 -${dmg}${isUltimate?' <span style="color:#f40">[大火計: 천지가 불탄다!]</span>':(terr==='forest'?' <span style="color:#f80">[숲: 대폭발!]</span>':'')}${B.weatherObj&&B.weatherObj.effect==='fire_boost'?' <span style="color:#8cf">[강풍!]</span>':''}<br><span style="color:#fa0;font-size:11px">🔥 불길이 ${windLabel()}을 타고 번진다!</span>`;
   } else if(key==='confuse'){
     target.status.confuse=2; target.morale=Math.max(0,target.morale-15);
     for(let i=0;i<12;i++) setTimeout(()=>spawnParticles(cx,cy,2,'#c0f'),i*40);
