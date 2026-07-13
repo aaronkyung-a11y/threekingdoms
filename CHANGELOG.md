@@ -1,5 +1,11 @@
 # 群雄割據 (삼국지) CHANGELOG
 
+## v2.36 (2026-07-13)
+전투 음악(MP3) 적용.
+- Suno 제작 "Red Banner Charge"를 전투(battle) BGM으로 적용 (bgm/battle.mp3, 3분20초 루프)
+- 타이틀·평시·전투 세 모드가 실제 음원, 승리·긴박은 합성음 유지
+- MP3 로드·전환(battle↔field)·전 8개 시나리오·런타임 에러 0 검증
+
 ## v2.35 (2026-07-13)
 평시 필드 음악(MP3) 적용.
 - Suno 제작 "静庭清音"을 평시(field) BGM으로 적용 (bgm/field.mp3, 6분27초 루프)
