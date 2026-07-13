@@ -458,7 +458,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.43';
+const GAME_VERSION = 'v2.44';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -3308,8 +3308,11 @@ function reachableHexes(u){
       const cost=TERR_MOVECOST[h.terr]||1;
       const nd=dist[ck]+cost;
       const nk=nb.col+','+nb.row;
-      if(nd<=budget && (dist[nk]===undefined || nd<dist[nk])){
-        dist[nk]=nd; q.push({col:nb.col,row:nb.row});
+      // 마지막 한 칸 규칙: 아직 이동을 시작한 지점(비용 남음)이면, 비용이 예산을 넘는
+      // 고비용 지형(강 등)에도 인접이면 진입 허용(남은 이동력 전부 소모). 도하 가능.
+      const canEnterLastStep = dist[ck] < budget; // 현재 칸까지 예산이 남아있으면
+      if((nd<=budget || canEnterLastStep) && (dist[nk]===undefined || Math.min(nd,budget)<dist[nk])){
+        dist[nk]=Math.min(nd,budget); q.push({col:nb.col,row:nb.row});
       }
     }
   }
