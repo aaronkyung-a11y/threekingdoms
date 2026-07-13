@@ -61,7 +61,8 @@
   #mapsvg:active{ cursor:grabbing; }
   #zoomctrl{ position:absolute; right:10px; top:10px; z-index:6; display:flex; flex-direction:column; gap:6px; }
   #zoomctrl button{ width:42px; height:42px; border-radius:8px; border:1px solid var(--gold);
-    background:rgba(20,16,10,.85); color:var(--gold); font-size:20px; font-weight:bold; cursor:pointer; }
+    background:rgba(20,16,10,.85); color:var(--gold); font-size:20px; font-weight:bold; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; line-height:1; padding:0; box-sizing:border-box; }
   #zoomctrl button:active{ background:var(--gold); color:#000; }
   .city-node{ cursor:pointer; }
   .city-label{ font-size:16px; fill:var(--ink); pointer-events:none; text-anchor:middle; font-weight:bold;
@@ -490,7 +491,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.51';
+const GAME_VERSION = 'v2.52';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -1160,6 +1161,11 @@ function init(scenarioKey, chosenFaction){
       if(G.factions[fid]) G.factions[fid].name=nm;
     }
   }
+  // 세력명이 촉/유비 계열이면 초록색으로 (공손찬 슬롯이 촉으로 재활용될 때 파랑→초록)
+  G.factions.forEach(f=>{
+    if(!f) return;
+    if(/촉|유비|유장/.test(f.name)) f.color='#2e8b57';       // 촉 = 초록
+  });
   // 도시 기본 배치 + 시나리오 override
   const nameToId={}; CITY_DEFS.forEach(c=>nameToId[c.name]=c.id);
   G.cities = CITY_DEFS.map(c=>{
@@ -1216,6 +1222,20 @@ function init(scenarioKey, chosenFaction){
     }
   });
   G.generals = debutFiltered;
+  // === 멸망 세력 무장 정리: 후기 시나리오에서 genMove에 없고 원래 소속이 멸망한 무장은 미등장 ===
+  // (예: 219년 한중쟁탈전에서 손건·진등·저수 등 옛 군벌의 조연이 도시 주인 따라 엉뚱한 세력에 흡수되던 문제 해결)
+  if(scn.factionDead && scn.factionDead.length){
+    const deadSet = new Set(scn.factionDead);
+    const namedInMove = new Set(scn.genMove ? Object.keys(scn.genMove) : []);
+    const origFaction = {}; GEN_DEFS.forEach(gd=>{ origFaction[gd[0]] = gd[5]; });
+    G.generals = G.generals.filter(g=>{
+      if(namedInMove.has(g.name)) return true;       // genMove에 명시된 무장은 유지(귀순 명장 등)
+      const of = origFaction[g.name];
+      if(of===undefined || of===-1) return true;      // 재야 출신은 유지
+      if(deadSet.has(of)) return false;               // 원래 소속이 멸망 → 미등장
+      return true;
+    });
+  }
   // 무장 소속을 도시 소유주에 맞게 재조정 (도시 주인이 바뀐 경우) — 재야(-1)는 제외
   G.generals.forEach(g=>{
     if(g.faction===-1) return; // 재야 무장은 소속 없음 유지
