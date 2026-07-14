@@ -158,25 +158,25 @@
   .form-info{ display:flex; justify-content:space-around; padding:8px; background:var(--panel2);
     border-radius:6px; margin-bottom:8px; font-size:14px; }
   .form-info b{ color:var(--gold); }
-  .form-row{ display:flex; align-items:center; gap:6px; padding:8px 6px; background:#241c10;
-    border:1px solid var(--line); border-radius:6px; margin-bottom:6px; }
+  .form-row{ display:flex; align-items:center; gap:5px; padding:8px 6px; background:#241c10;
+    border:1px solid var(--line); border-radius:6px; margin-bottom:6px; flex-wrap:wrap; }
   .form-row.on{ border-color:var(--gold); background:#2e2512; }
   .form-row.dis{ opacity:0.45; }
   .fr-check{ width:28px; height:28px; display:flex; align-items:center; justify-content:center;
     border:1px solid var(--gold); border-radius:5px; color:var(--gold); font-weight:bold; cursor:pointer; flex-shrink:0; }
-  .fr-name{ font-size:13px; font-weight:bold; color:var(--ink); min-width:52px; line-height:1.3; }
+  .fr-name{ font-size:13px; font-weight:bold; color:var(--ink); min-width:48px; line-height:1.3; flex-shrink:0; }
   .fr-name .fr-stat{ font-size:10px; color:var(--ink2); font-weight:normal; }
-  .fr-tt{ display:flex; gap:3px; }
-  .fr-tt .ttpick{ min-width:34px; height:30px; display:flex; align-items:center; justify-content:center; gap:1px;
-    border:1px solid var(--line); border-radius:5px; cursor:pointer; font-size:13px; }
+  .fr-tt{ display:flex; gap:3px; flex-shrink:0; }
+  .fr-tt .ttpick{ min-width:30px; height:30px; display:flex; align-items:center; justify-content:center; gap:1px;
+    border:1px solid var(--line); border-radius:5px; cursor:pointer; font-size:12px; }
   .fr-tt .ttpick.sel{ border-color:var(--gold); background:var(--gold); }
   .fr-tt .ttpick .ttgrade{ font-size:10px; color:#999; }
   .fr-tt .ttpick .ttgrade.g-hi{ color:#ffd700; }
   .fr-tt .ttpick.sel .ttgrade{ color:#000; }
-  .fr-troops{ display:flex; align-items:center; gap:4px; margin-left:auto; }
-  .fr-troops button{ width:26px; height:26px; border:1px solid var(--gold); background:var(--panel2);
-    color:var(--gold); border-radius:5px; font-size:15px; cursor:pointer; }
-  .fr-troops span{ min-width:44px; text-align:center; font-size:12px; color:var(--ink); }
+  .fr-troops{ display:flex; align-items:center; gap:4px; margin-left:auto; flex-shrink:0; }
+  .fr-troops button{ width:28px; height:28px; border:1px solid var(--gold); background:var(--panel2);
+    color:var(--gold); border-radius:5px; font-size:15px; cursor:pointer; flex-shrink:0; }
+  .fr-troops span{ min-width:46px; text-align:center; font-size:12px; color:var(--ink); }
 
   /* End turn button */
   #endturn{ position:absolute; right:12px; bottom:12px; z-index:5; background:linear-gradient(#c0392b,#8b1a1a);
@@ -516,7 +516,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.61';
+const GAME_VERSION = 'v2.62';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2949,9 +2949,15 @@ function playCutscene(genName, done){
   const img=box.querySelector('.cs-img');
   const nm=box.querySelector('.cs-name');
   const sub=box.querySelector('.cs-sub');
+  // 이전 상태 완전 초기화 (애니메이션 재시작 보장 — 무쌍처럼 연속 발동 시 슬라이드 안 되던 문제)
+  box.className=''; 
+  img.style.animation='none'; nm.style.animation='none'; sub.style.animation='none';
+  void box.offsetWidth; // reflow
+  img.style.animation=''; nm.style.animation=''; sub.style.animation='';
   img.src=cs.img; nm.textContent=cs.name; nm.style.color=cs.color;
   sub.textContent=cs.sub;
-  box.className='show'; void box.offsetWidth;
+  void box.offsetWidth; // 한 번 더 reflow
+  box.className='show';
   // 연출 사운드/진동
   sfx('crit'); haptic(160); shake('xl');
   setTimeout(()=>haptic(80), 400);
