@@ -516,7 +516,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.55';
+const GAME_VERSION = 'v2.56';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -562,51 +562,51 @@ const SCENARIOS = {
 };
 
 const CITY_DEFS=[
-  {id:0,name:'북평',x:430,y:70,prov:'유주',owner:7,links:[1, 2]},
-  {id:1,name:'계',x:370,y:85,prov:'유주',owner:7,links:[0, 3, 5]},
-  {id:2,name:'양평',x:500,y:55,prov:'유주',owner:7,links:[0]},
-  {id:3,name:'진양',x:300,y:160,prov:'병주',owner:-1,links:[1, 4, 6, 16]},
-  {id:4,name:'상당',x:340,y:200,prov:'병주',owner:-1,links:[3, 6, 16]},
-  {id:5,name:'남피',x:440,y:150,prov:'기주',owner:2,links:[1, 6, 7]},
-  {id:6,name:'업',x:385,y:205,prov:'기주',owner:3,links:[3, 4, 5, 7, 16, 17, 18]},
-  {id:7,name:'평원',x:470,y:195,prov:'기주',owner:3,links:[5, 6, 8, 9]},
-  {id:8,name:'북해',x:530,y:200,prov:'청주',owner:11,links:[7, 9]},
-  {id:9,name:'제남',x:490,y:235,prov:'청주',owner:-1,links:[7, 8, 18, 24]},
-  {id:10,name:'무위',x:70,y:175,prov:'서량',owner:8,links:[11]},
-  {id:11,name:'천수',x:120,y:230,prov:'서량',owner:8,links:[10, 12]},
-  {id:12,name:'안정',x:175,y:210,prov:'서량',owner:8,links:[11, 13]},
-  {id:13,name:'장안',x:230,y:260,prov:'사례',owner:1,links:[12, 14, 26]},
-  {id:14,name:'홍농',x:290,y:270,prov:'사례',owner:1,links:[13, 15]},
-  {id:15,name:'낙양',x:340,y:275,prov:'사례',owner:1,links:[14, 16, 17, 31]},
-  {id:16,name:'하내',x:355,y:235,prov:'사례',owner:-1,links:[3, 4, 6, 15]},
-  {id:17,name:'진류',x:410,y:265,prov:'연주',owner:0,links:[6, 15, 18, 19, 20]},
-  {id:18,name:'복양',x:445,y:240,prov:'연주',owner:12,links:[6, 9, 17, 19]},
-  {id:19,name:'산양',x:460,y:285,prov:'연주',owner:12,links:[17, 18, 20, 22, 24]},
-  {id:20,name:'허창',x:390,y:315,prov:'예주',owner:-1,links:[17, 19, 21, 22, 31]},
-  {id:21,name:'여남',x:420,y:350,prov:'예주',owner:13,links:[20, 22, 31, 38]},
-  {id:22,name:'초',x:460,y:330,prov:'예주',owner:0,links:[19, 20, 21, 24]},
-  {id:23,name:'하비',x:510,y:305,prov:'서주',owner:10,links:[24, 25, 38]},
-  {id:24,name:'소패',x:480,y:300,prov:'서주',owner:10,links:[9, 19, 22, 23]},
-  {id:25,name:'광릉',x:545,y:350,prov:'서주',owner:10,links:[23, 38, 40]},
-  {id:26,name:'한중',x:195,y:330,prov:'익주',owner:14,links:[13, 27, 29, 31]},
-  {id:27,name:'성도',x:120,y:410,prov:'익주',owner:9,links:[26, 28, 29]},
-  {id:28,name:'강주',x:190,y:445,prov:'익주',owner:9,links:[27, 29, 30]},
-  {id:29,name:'재동',x:145,y:370,prov:'익주',owner:9,links:[26, 27, 28]},
-  {id:30,name:'건녕',x:165,y:520,prov:'익주',owner:-1,links:[28, 36]},
-  {id:31,name:'완',x:320,y:350,prov:'형주',owner:5,links:[15, 20, 21, 26, 32]},
-  {id:32,name:'양양',x:300,y:400,prov:'형주',owner:6,links:[31, 33, 34, 36]},
-  {id:33,name:'강릉',x:310,y:460,prov:'형주',owner:6,links:[32, 34, 35, 36]},
-  {id:34,name:'강하',x:385,y:445,prov:'형주',owner:6,links:[32, 33, 35, 38, 43]},
-  {id:35,name:'장사',x:340,y:530,prov:'형주',owner:4,links:[33, 34, 36, 37, 43]},
-  {id:36,name:'무릉',x:275,y:500,prov:'형주',owner:6,links:[30, 32, 33, 35]},
-  {id:37,name:'계양',x:355,y:600,prov:'형주',owner:-1,links:[35, 44]},
-  {id:38,name:'수춘',x:470,y:385,prov:'양주',owner:5,links:[21, 23, 25, 34, 39]},
-  {id:39,name:'여강',x:490,y:425,prov:'양주',owner:-1,links:[38, 40, 43]},
-  {id:40,name:'건업',x:555,y:410,prov:'양주',owner:-1,links:[25, 39, 41, 43]},
-  {id:41,name:'오',x:585,y:445,prov:'양주',owner:-1,links:[40, 42]},
-  {id:42,name:'회계',x:570,y:510,prov:'양주',owner:-1,links:[41, 43]},
-  {id:43,name:'예장',x:445,y:500,prov:'양주',owner:-1,links:[34, 35, 39, 40, 42]},
-  {id:44,name:'남해',x:420,y:660,prov:'교주',owner:15,links:[37, 45]},
+  {id:0,name:'북평',x:455,y:95,prov:'유주',owner:7,links:[1, 2]},
+  {id:1,name:'계',x:415,y:110,prov:'유주',owner:7,links:[0, 3, 5]},
+  {id:2,name:'양평',x:530,y:80,prov:'유주',owner:7,links:[0]},
+  {id:3,name:'진양',x:330,y:175,prov:'병주',owner:-1,links:[1, 4, 6, 16]},
+  {id:4,name:'상당',x:360,y:220,prov:'병주',owner:-1,links:[3, 6, 16]},
+  {id:5,name:'남피',x:450,y:165,prov:'기주',owner:2,links:[1, 6, 7]},
+  {id:6,name:'업',x:400,y:210,prov:'기주',owner:3,links:[3, 4, 5, 7, 16, 17, 18]},
+  {id:7,name:'평원',x:475,y:195,prov:'기주',owner:3,links:[5, 6, 8, 9]},
+  {id:8,name:'북해',x:555,y:205,prov:'청주',owner:11,links:[7, 9]},
+  {id:9,name:'제남',x:505,y:220,prov:'청주',owner:-1,links:[7, 8, 18, 24]},
+  {id:10,name:'무위',x:90,y:155,prov:'서량',owner:8,links:[11]},
+  {id:11,name:'천수',x:150,y:220,prov:'서량',owner:8,links:[10, 12]},
+  {id:12,name:'안정',x:200,y:195,prov:'서량',owner:8,links:[11, 13]},
+  {id:13,name:'장안',x:255,y:265,prov:'사례',owner:1,links:[12, 14, 26]},
+  {id:14,name:'홍농',x:310,y:275,prov:'사례',owner:1,links:[13, 15]},
+  {id:15,name:'낙양',x:350,y:275,prov:'사례',owner:1,links:[14, 16, 17, 31]},
+  {id:16,name:'하내',x:365,y:235,prov:'사례',owner:-1,links:[3, 4, 6, 15]},
+  {id:17,name:'진류',x:410,y:260,prov:'연주',owner:0,links:[6, 15, 18, 19, 20]},
+  {id:18,name:'복양',x:440,y:235,prov:'연주',owner:12,links:[6, 9, 17, 19]},
+  {id:19,name:'산양',x:455,y:285,prov:'연주',owner:12,links:[17, 18, 20, 22, 24]},
+  {id:20,name:'허창',x:390,y:310,prov:'예주',owner:-1,links:[17, 19, 21, 22, 31]},
+  {id:21,name:'여남',x:415,y:350,prov:'예주',owner:13,links:[20, 22, 31, 38]},
+  {id:22,name:'초',x:455,y:325,prov:'예주',owner:0,links:[19, 20, 21, 24]},
+  {id:23,name:'하비',x:505,y:305,prov:'서주',owner:10,links:[24, 25, 38]},
+  {id:24,name:'소패',x:475,y:300,prov:'서주',owner:10,links:[9, 19, 22, 23]},
+  {id:25,name:'광릉',x:530,y:355,prov:'서주',owner:10,links:[23, 38, 40]},
+  {id:26,name:'한중',x:210,y:315,prov:'익주',owner:14,links:[13, 27, 29, 31]},
+  {id:27,name:'성도',x:130,y:400,prov:'익주',owner:9,links:[26, 28, 29]},
+  {id:28,name:'강주',x:200,y:445,prov:'익주',owner:9,links:[27, 29, 30]},
+  {id:29,name:'재동',x:160,y:360,prov:'익주',owner:9,links:[26, 27, 28]},
+  {id:30,name:'건녕',x:185,y:540,prov:'익주',owner:-1,links:[28, 36]},
+  {id:31,name:'완',x:325,y:340,prov:'형주',owner:5,links:[15, 20, 21, 26, 32]},
+  {id:32,name:'양양',x:315,y:390,prov:'형주',owner:6,links:[31, 33, 34, 36]},
+  {id:33,name:'강릉',x:325,y:450,prov:'형주',owner:6,links:[32, 34, 35, 36]},
+  {id:34,name:'강하',x:390,y:435,prov:'형주',owner:6,links:[32, 33, 35, 38, 43]},
+  {id:35,name:'장사',x:350,y:525,prov:'형주',owner:4,links:[33, 34, 36, 37, 43]},
+  {id:36,name:'무릉',x:285,y:495,prov:'형주',owner:6,links:[30, 32, 33, 35]},
+  {id:37,name:'계양',x:365,y:595,prov:'형주',owner:-1,links:[35, 44]},
+  {id:38,name:'수춘',x:465,y:375,prov:'양주',owner:5,links:[21, 23, 25, 34, 39]},
+  {id:39,name:'여강',x:490,y:415,prov:'양주',owner:-1,links:[38, 40, 43]},
+  {id:40,name:'건업',x:530,y:405,prov:'양주',owner:-1,links:[25, 39, 41, 43]},
+  {id:41,name:'오',x:575,y:435,prov:'양주',owner:-1,links:[40, 42]},
+  {id:42,name:'회계',x:555,y:500,prov:'양주',owner:-1,links:[41, 43]},
+  {id:43,name:'예장',x:445,y:490,prov:'양주',owner:-1,links:[34, 35, 39, 40, 42]},
+  {id:44,name:'남해',x:430,y:645,prov:'교주',owner:15,links:[37, 45]},
   {id:45,name:'교지',x:310,y:700,prov:'교주',owner:15,links:[44]},
 ];
 
@@ -1399,70 +1399,10 @@ const CHANGJIANG="M 120,415 Q 180,445 250,455 Q 320,470 385,455 Q 440,470 490,44
 function renderMap(){
   const svg = document.getElementById('mapsvg');
   let h = '';
-  // === 지도 배경: 방위별 지대 (바다는 동·남쪽만) ===
-  h += `<defs>
-    <radialGradient id="seaGrad" cx="50%" cy="50%" r="70%">
-      <stop offset="0%" stop-color="#16303f"/>
-      <stop offset="60%" stop-color="#112838"/>
-      <stop offset="100%" stop-color="#0a1a26"/>
-    </radialGradient>
-    <linearGradient id="steppeGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3a3320"/>
-      <stop offset="100%" stop-color="#2e2a1a"/>
-    </linearGradient>
-    <linearGradient id="desertGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#4a4028"/>
-      <stop offset="100%" stop-color="#33301e"/>
-    </linearGradient>
-    <pattern id="wavePat" width="34" height="20" patternUnits="userSpaceOnUse">
-      <path d="M0 10 Q 8 4 17 10 T 34 10" fill="none" stroke="#2a5570" stroke-width="1" opacity="0.25"/>
-    </pattern>
-    <pattern id="dunePat" width="46" height="26" patternUnits="userSpaceOnUse">
-      <path d="M0 20 Q 12 12 23 20 T 46 20" fill="none" stroke="#5a4e30" stroke-width="1" opacity="0.3"/>
-    </pattern>
-    <filter id="coastGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="6" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>`;
-  // 1) 전체 바탕: 북/서의 대륙 지대 (초원·사막·고원)
-  h += `<rect x="-60" y="-80" width="800" height="960" fill="url(#steppeGrad)"/>`;
-  // 2) 서쪽 고원/사막대 (좌측)
-  h += `<rect x="-60" y="-80" width="230" height="960" fill="url(#desertGrad)"/>`;
-  h += `<rect x="-60" y="-80" width="230" height="960" fill="url(#dunePat)"/>`;
-  // 3) 북쪽 초원대 (상단) — 사구 패턴 옅게
-  h += `<rect x="-60" y="-80" width="800" height="210" fill="url(#dunePat)" opacity="0.6"/>`;
-  // 4) 동·남쪽 바다: 육지의 동남 해안을 감싸는 영역만
-  //    (동쪽 x≳560, 남쪽 y≳640 바깥을 바다로. 폴리곤으로 동남 모서리를 덮음)
-  const SEA_EAST = "M 560,185 L 555,255 L 600,270 L 610,300 L 590,320 L 600,355 L 615,395 L 600,430 L 620,465 L 610,505 L 585,535 L 560,555 L 530,545 L 505,560 L 480,590 L 450,630 L 440,670 L 415,700 L 370,720 L 320,715 L 285,700 L 320,880 L 780,880 L 780,120 L 545,120 Z";
-  h += `<path d="${SEA_EAST}" fill="url(#seaGrad)"/>`;
-  h += `<path d="${SEA_EAST}" fill="url(#wavePat)"/>`;
-  // 해안 글로우(동남 해안선만 강조)
-  h += `<path d="${CHINA_LAND}" fill="none" stroke="#3a6a80" stroke-width="6" opacity="0.4" filter="url(#coastGlow)"/>`;
-  // 배경 육지
-  h += `<path d="${CHINA_LAND}" fill="#453c26" stroke="#7a6a44" stroke-width="2.5"/>`;
-  // 강
-  h += `<path d="${HUANGHE}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
-  h += `<path d="${CHANGJIANG}" fill="none" stroke="#4a7a9a" stroke-width="4" opacity="0.6"/>`;
-  h += `<text x="150" y="200" font-size="13" fill="#6a9aba" opacity="0.7">黃河</text>`;
-  h += `<text x="175" y="440" font-size="13" fill="#6a9aba" opacity="0.7">長江</text>`;
-  // 지대 라벨: 바다는 東海·南海, 북은 초원/사막, 서는 서역
-  h += `<text x="650" y="360" font-size="16" fill="#4a7a95" opacity="0.55" text-anchor="middle" font-style="italic">東海</text>`;
-  h += `<text x="420" y="800" font-size="14" fill="#4a7a95" opacity="0.5" text-anchor="middle" font-style="italic">南海</text>`;
-  h += `<text x="300" y="70" font-size="14" fill="#8a7a50" opacity="0.5" text-anchor="middle" font-style="italic">草原 (흉노·선비)</text>`;
-  h += `<text x="55" y="400" font-size="14" fill="#9a8555" opacity="0.5" text-anchor="middle" font-style="italic" transform="rotate(-90 55 400)">西域 高原</text>`;
-  // 장식: 배는 동해에만
-  h += `<g opacity="0.4">
-    <path d="M665 300 l10 0 l-3 8 l-4 0 z M670 296 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
-    <path d="M640 470 l9 0 l-3 7 l-3 0 z M644 466 l0 8" fill="#5a7a90" stroke="#5a7a90" stroke-width="1"/>
-  </g>`;
-  // 나침도(compass rose) 좌하단
-  h += `<g transform="translate(75,700)" opacity="0.5">
-    <circle r="20" fill="none" stroke="#8a7a55" stroke-width="1"/>
-    <path d="M0 -18 L4 0 L0 18 L-4 0 Z" fill="#a89a70"/>
-    <path d="M-18 0 L0 -4 L18 0 L0 4 Z" fill="#6a5e40"/>
-    <text x="0" y="-24" font-size="9" fill="#b8a878" text-anchor="middle">北</text>
-  </g>`;
+  // === 지도 배경: 수묵 고지도 이미지 ===
+  h += `<image href="mapbg/china.jpg" x="30" y="20" width="620" height="730" preserveAspectRatio="xMidYMid slice"/>`;
+  // 살짝 어둡게 오버레이(도시·글자 가독성)
+  h += `<rect x="30" y="20" width="620" height="730" fill="#1a1408" opacity="0.12"/>`;
 
   // links (도로)
   const drawn = new Set();
