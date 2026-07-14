@@ -516,7 +516,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.60';
+const GAME_VERSION = 'v2.61';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -2756,6 +2756,7 @@ const BGM_MP3 = {
   battle: 'bgm/battle.mp3',
   victory: 'bgm/victory.mp3',
   ending: 'bgm/ending.mp3',
+  defeat: 'bgm/defeat.mp3',
 };
 let bgmAudio = null; // <audio> 엘리먼트 (MP3용)
 function stopMp3(){
@@ -4865,7 +4866,7 @@ function showEnding(type){
     poem=`${info.name}의 대업은 여기서 끝났다.\n\n난세에 스러진 수많은 영웅처럼\n그대의 이름도 역사의 뒤안길로 사라진다.\n\n그러나 그 뜻만은 잊히지 않으리라.`;
   }
   // 엔딩 음악 재생 (통일/패권은 웅장, 패망도 같은 곡의 여운)
-  try{ if(FX.enabled){ startBgm('ending'); } }catch(e){}
+  try{ if(FX.enabled){ startBgm(type==='defeat' ? 'defeat' : 'ending'); } }catch(e){}
   // 전용 엔딩 오버레이 (배경 이미지 + 시 페이드인)
   const ov=document.getElementById('endingScene');
   const inner=`
