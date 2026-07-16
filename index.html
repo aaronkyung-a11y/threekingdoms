@@ -334,7 +334,7 @@
   #cutscene{ position:fixed; inset:0; z-index:80; pointer-events:none; display:none;
     background:radial-gradient(circle at 50% 50%, rgba(0,0,0,.35), rgba(0,0,0,.82)); overflow:hidden; }
   #cutscene.show{ display:block; }
-  #cutscene .cs-img{ position:absolute; right:-10%; bottom:0; height:96%; max-width:none;
+  #cutscene .cs-img{ position:absolute; right:-4%; bottom:0; height:72%; max-width:none;
     filter:drop-shadow(0 0 30px rgba(0,0,0,.9)); opacity:0; }
   #cutscene.show .cs-img{ animation:csImgIn 1.9s cubic-bezier(.16,.9,.28,1) forwards; }
   @keyframes csImgIn{
@@ -516,7 +516,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.63';
+const GAME_VERSION = 'v2.64';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
