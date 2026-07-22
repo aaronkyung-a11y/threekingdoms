@@ -334,7 +334,7 @@
   #cutscene{ position:fixed; inset:0; z-index:80; pointer-events:none; display:none;
     background:radial-gradient(circle at 50% 50%, rgba(0,0,0,.35), rgba(0,0,0,.82)); overflow:hidden; }
   #cutscene.show{ display:block; }
-  #cutscene .cs-img{ position:absolute; right:-4%; bottom:0; height:72%; max-width:none;
+  #cutscene .cs-img{ position:absolute; right:2%; bottom:8%; height:48%; max-width:none;
     filter:drop-shadow(0 0 30px rgba(0,0,0,.9)); opacity:0; }
   #cutscene.show .cs-img{ animation:csImgIn 1.9s cubic-bezier(.16,.9,.28,1) forwards; }
   @keyframes csImgIn{
@@ -516,7 +516,7 @@
    - 내정: 삼국지 2식 커맨드 방식
    - 전투: 삼국지 3식 헥스맵 전략전투
    ============================================================ */
-const GAME_VERSION = 'v2.64';
+const GAME_VERSION = 'v2.65';
 function paintVersion(){
   var o=document.getElementById('opVer'); if(o) o.textContent=GAME_VERSION;
   var t=document.getElementById('tbVer'); if(t) t.textContent=GAME_VERSION;
@@ -4075,7 +4075,8 @@ function tickStatuses(side){
     if(u.status.inspired){ u.status.inspired--; if(u.status.inspired<=0) delete u.status.inspired; }
   });
   if(B.weatherObj && B.weatherObj.effect==='plague'){
-    B.units.filter(u=>u.troops>0).forEach(u=>{ const d=Math.floor(u.maxTroops*0.03); u.troops=Math.max(0,u.troops-d); });
+    // 역병: 매 턴 현재 병력의 1.2% 감소 (이전 최대병력 3%는 과도해 12턴이면 36% 손실)
+    B.units.filter(u=>u.troops>0).forEach(u=>{ const d=Math.max(10,Math.floor(u.troops*0.012)); u.troops=Math.max(0,u.troops-d); });
   }
 }
 
